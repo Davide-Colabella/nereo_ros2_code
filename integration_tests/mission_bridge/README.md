@@ -12,8 +12,10 @@ branch `tesi-davide`), against a simulated vehicle.
 | `fake_vehicle.py` | `SIM=fake`: sensors fixed at the surface (depth 0, IMU, diagnostics), firmware arming `/set_arm_mode` → `/rov_armed`, tare services |
 | `sim_dinamica` (`gui_pkg`) | `SIM=dinamica`: closed-loop simulator, see below |
 | `pilot.py` | scenario `base` |
+| `missione.py` | scenarios `completa`, `batteria`, `barometro`, `override` (closed loop) |
 
-Every scenario prints `PASS`/`FAIL` per check and `RESULT PASS`/`RESULT FAIL`.
+Every scenario prints `PASS`/`FAIL` per check, the states the chart went through
+(`STATES Boot/WaitLink > ...`) and `RESULT PASS`/`RESULT FAIL`.
 
 ## Running
 
@@ -24,13 +26,13 @@ export NEREO_GUI_WS=~/nereo_ros2_code/gui_ws/install
 export CONTROLLER_WS=~/ros2_controller_tuning_aid/install
 export TESI_WS=~/Tesi-Magistrale/ros2/install
 ./integration_tests/mission_bridge/run.sh                                  # SIM=fake, base
-SIM=dinamica ./integration_tests/mission_bridge/run.sh                     # closed loop
+SIM=dinamica SCENARIO=completa ./integration_tests/mission_bridge/run.sh   # closed loop
 ```
 
 | Variable | Default | |
 |---|---|---|
 | `SIM` | `fake` | `fake` or `dinamica` |
-| `SCENARIO` | `base` | the scenario |
+| `SCENARIO` | `base` (fake), `completa` (dinamica) | `base` runs with both simulators, the others only with `dinamica` |
 | `BAG` | 0 (fake), 1 (dinamica) | 1: `ros2 bag record -a` into `$LOG_DIR/bag_<scenario>` |
 | `LOG_DIR` | a temporary folder | node logs, `pilot_<scenario>.log`, bags |
 | `ROS_DOMAIN_ID` | 77 | keeps the test off the vehicle network |
@@ -81,3 +83,52 @@ With `SIM=dinamica` the controller runs with **test gains** for the simulator, n
 - `kp` [1.5, 0.5, 0.5, 1.5], `ki` [0.03, 0, 0, 0.05], `kd` 0.
 
 The PID is incremental, at the 10 Hz of the bridge. Its default gains are 0, which means no feedback.
+
+## Scenarios `completa`, `batteria`, `barometro`, `override` (`SIM=dinamica`)
+
+Plan, published by the scenario (seabed at 4.5 m, `max_depth` 4 m):
+
+| # | Task | Depth | Heading | Speed | Duration | Altitude |
+|---|---|---|---|---|---|---|
+| 1 | HOLD | 2.0 m | — | — | 20 s | — |
+| 2 | TRANSECT | 2.0 m | 0.8 rad | 0.25 m/s | 20 s | — |
+| 3 | ALTITUDE_HOLD | — | 0.8 rad | — | 20 s | 2.0 m |
+
+| Scenario | Event | Expected |
+|---|---|---|
+| `completa` | none | Ready → Mission (the three tasks) → Surfaced → Ready, `mission_done`, no abort reason. Checks on the simulator: depth within 0.2 m in HOLD, heading and course of the transect, altitude at the end of ALTITUDE_HOLD |
+| `batteria` | bench battery at 20 % (`P_BATT_ABORT` 25 %) during HOLD | watchdog → Abort with reason BATTERY → emergency ascent → Surfaced → Ready |
+| `barometro` | barometer silent during HOLD | health CRITICAL → FaultSafe with reason CRITICAL → disarm (FsLatched). The vehicle floats up; RESET is refused while the barometer is missing. Barometer back → RESET → FsResetting → Boot → Ready |
+| `override` | joystick override during the transect | MANUAL → Abort with reason OPERATOR, AUTONOMOUS refused. The pilot brings the vehicle up with the joystick (direct mode) and disarms at the surface → Surfaced → Ready |
+
+## Results (15/10/2026, ROS 2 Jazzy via RoboStack)
+
+All six runs passed (`RESULT PASS`), each node running once, no process left after
+the run. States as printed by the scenarios (top state / substate, abort reason in
+brackets; Boot omitted):
+
+- **`completa`** (111 s): Ready/Idle > PlanLoaded > PreDive/RequestArm > WaitArmAck > Mission/LeaveSurface > DescendToDepth > SettleAtDepth > SelectTask > PrepareTask > Hold > SelectTask > PrepareTask > TrAlign > TrRun > SelectTask > PrepareTask > AltAcquire > AltTrack > SelectTask > AscToSafety > AscSlowFinal > Surfaced/SfConfirm > SfDisarm > SfReport > Ready/Idle, no abort reason, `mission_done`. On the simulator:
+  - **HOLD:** depth 2.00 to 2.01 m.
+  - **Transect:** yaw 0.80 rad, 4.6 m on course 0.78 rad.
+  - **ALTITUDE_HOLD:** altitude 2.00 m.
+  - **End:** disarmed at the surface.
+- **`batteria`** (46 s): … Mission/Hold > Abort/AbStopHorizontal (BATTERY) > AbEmergencyAscent > Surfaced/SfConfirm > SfDisarm > SfReport > Ready/Idle. Abort 0.2 s after the battery change; Surfaced 11.5 s later.
+- **`barometro`** (59 s): … Mission/Hold > FaultSafe/FsDisarm (CRITICAL) > FsLatched > [RESET refused without barometer] > FsResetting > Boot/WaitLink > CheckSensors > CheckBattery > Calibrate > Ready/Idle.
+  - **Detection:** FaultSafe 0.7 s after the barometer went silent.
+  - **Ascent:** the vehicle, disarmed, floated from 2.0 m to the surface in about 20 s.
+- **`override`** (68 s): … Mission/TrAlign > TrRun > Abort/AbStopHorizontal (OPERATOR) > AbEmergencyAscent > Surfaced/SfConfirm > SfDisarm > SfReport > Ready/Idle.
+  - **Selector:** AUTONOMOUS refused in Abort.
+  - **Pilot:** brought the vehicle to the surface in 8.6 s with the joystick, then disarmed.
+
+The abort reason stays set after the return to Ready, even through RESET and Boot
+(`barometro`): the chart resets `abort_reason` only on entering PreDive, at the next
+START. A reason seen in Ready is the one of the last mission.
+
+Bags (`ros2 bag record -a`, mcap, 1 to 3 MB per run) are kept with the thesis:
+`ros2/prove_integrazione` in `Tesi-Magistrale`, branch `modello-stateflow`.
+
+What the closed loop does not show:
+- **Transect alignment:** in TrAlign the vehicle does not turn to the transect heading. The chart sends `DEPTH_HOLD` with the heading, and the bridge maps `DEPTH_HOLD` to "hold the current yaw" (proposal, section 4). The turn happens at the start of TrRun.
+- **Simulator values:** the values not taken from `mission_env.m` and the controller gains are not vehicle values: the times and margins above are about the software chain, not the vehicle.
+- **Roll and pitch:** not simulated.
+- **Noise and losses:** no sensor noise and no packet loss, apart from the faults injected.

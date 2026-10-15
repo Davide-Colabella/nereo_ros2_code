@@ -8,7 +8,8 @@
 #
 # SIM=fake (default): fake_vehicle.py, sensors fixed at the surface; scenario
 #   pilot.py (SCENARIO=base, the only one).
-# SIM=dinamica: sim_dinamica of gui_pkg, closed loop; SCENARIO=base.
+# SIM=dinamica: sim_dinamica of gui_pkg, closed loop; SCENARIO=base, completa
+#   (default), batteria, barometro or override (missione.py).
 # BAG=1 (default with SIM=dinamica) records all topics with ros2 bag in
 #   $LOG/bag_<scenario>.
 # Defaults: the install folders next to the sources.
@@ -20,12 +21,12 @@ REPO="$(cd "$HERE/../.." && pwd)"
 : "${TESI_WS:=$REPO/../Tesi-Magistrale/ros2/install}"
 : "${ROS_DOMAIN_ID:=77}"
 : "${SIM:=fake}"
-if [ "$SIM" = dinamica ]; then : "${SCENARIO:=base}" "${BAG:=1}"; else : "${SCENARIO:=base}" "${BAG:=0}"; fi
+if [ "$SIM" = dinamica ]; then : "${SCENARIO:=completa}" "${BAG:=1}"; else : "${SCENARIO:=base}" "${BAG:=0}"; fi
 export ROS_DOMAIN_ID
 LOG="${LOG_DIR:-$(mktemp -d)}"
 mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
-  fake/base|dinamica/base) ;;
+  fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
@@ -65,7 +66,11 @@ if [ "$BAG" = 1 ]; then
   BAG_PID=$!
 fi
 
-timeout 120 python3 "$HERE/pilot.py" | tee "$LOG/pilot_$SCENARIO.log"
+if [ "$SCENARIO" = base ]; then
+  timeout 120 python3 "$HERE/pilot.py" | tee "$LOG/pilot_$SCENARIO.log"
+else
+  timeout 400 python3 "$HERE/missione.py" "$SCENARIO" | tee "$LOG/pilot_$SCENARIO.log"
+fi
 RESULT=${PIPESTATUS[0]}
 
 # background jobs of a non-interactive shell ignore SIGINT: stop with SIGTERM
