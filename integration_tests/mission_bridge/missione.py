@@ -259,6 +259,15 @@ def completa(s):
     s.check(depth and max(abs(d - 2.0) for d in depth[2:]) < 0.2,
             'HOLD: depth within 0.2 m of 2.0 (%.2f .. %.2f m)' % (
                 min(depth or [0]), max(depth or [0])))
+    # the bridge maps DEPTH_HOLD to setpoint.heading: the turn happens in TrAlign
+    yaw_in = s.truth[2] if s.wait_for(lambda: s.in_sub('TrAlign'), 60.0) and s.truth else None
+    align = s.track('TrAlign', 1.0, lambda x: x[2])
+    if yaw_in is not None and align:
+        s.check(abs(yaw_in) < 0.1 and abs(align[-1] - HEADING) < 0.1,
+                'TrAlign: yaw from %.2f to %.2f rad (plan %.2f), turned before TrRun' % (
+                    yaw_in, align[-1], HEADING))
+    else:
+        s.check(False, 'TrAlign reached')
     run = s.track('TrRun', 60.0, lambda x: (x[2], x[3], x[4], x[1]))
     if run:
         yaw_end = run[-1][0]
