@@ -3,7 +3,7 @@
 Checks the thesis mission bridge (`nereo_mission_bridge`, repository
 `Davide-Colabella/Tesi-Magistrale`, branch `modello-stateflow`) together with
 `safety_node` (guidance mode selector) and `nereo_controller_node`
-(`/controller/target`, repository `PoliTOcean/ros2_controller_tuning_aid`,
+(`/controller/target`, repository `Davide-Colabella/ros2_controller_tuning_aid`,
 branch `tesi-davide`), against a simulated vehicle.
 
 | File | Role |

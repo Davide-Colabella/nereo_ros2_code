@@ -1,6 +1,6 @@
 # Porting from ROS 2 Humble to ROS 2 Jazzy
 
-Branch `tesi-davide`. Target: Ubuntu 24.04 (noble) with ROS 2 Jazzy on both the Raspberry Pi and the workstation (the Pi already ran Jazzy, see `SETUP_RPI/README.md`). Changes are kept minimal: only what does not build, does not run or names the wrong distro.
+Branch `tesi-davide` of the fork `Davide-Colabella/nereo_ros2_code`, from `main` of `PoliTOcean/nereo_ros2_code` (a4556e6). Target: Ubuntu 24.04 (noble) with ROS 2 Jazzy on both the Raspberry Pi and the workstation (the Pi already ran Jazzy, see `SETUP_RPI/README.md`). Changes are kept minimal: only what does not build, does not run or names the wrong distro.
 
 ## How it was checked
 
@@ -10,7 +10,7 @@ The apt repository of ROS was not reachable from the build machine, so Jazzy cam
 |---|---|---|
 | `gui_ws` (`nereo_interfaces`, `gui_pkg`, `joystick_pkg`, `web_pkg`) | ok | `joystick_pkg`: 3 lint tests run; `test_flake8` and `test_pep257` fail on existing style issues in `joy_to_cmdvel.py` (import order, docstrings), `test_copyright` skipped. Not porting issues, left as they are. The other packages have no tests |
 | `rpi_ws` (`nereo_sensors_pkg`, `sonar_pkg`) | ok (only the existing `-Wsign-compare`, `-Wunused-function` warnings in the sensor C sources) | 11/11 |
-| `ros2_controller_tuning_aid` (separate repository, same branch name) | ok after the Eigen change below | no tests registered in CMake |
+| `ros2_controller_tuning_aid` (separate repository, fork `Davide-Colabella/ros2_controller_tuning_aid`, same branch name) | ok after the Eigen change below | no tests registered in CMake |
 
 Every node was also started for 6 s with `ros2 run` and stopped with SIGINT: `safety_node`, `web_server_node` (twice on the same port), `joy_to_cmdvel`, `rov_cmd_monitor`, `rov_sim_node`, `sonar_sim_node`, `nereo_controller_node`; all exit cleanly, with no tracebacks. `gui_node` and `sonar_node` were only imported, because they need a display and the Ping1D serial port. `nereo_sensors_pkg` was only built and unit-tested, because it needs the I2C sensors.
 

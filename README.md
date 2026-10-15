@@ -215,7 +215,7 @@ nereo_ros2_code/
 | `rosbridge_websocket` | `rosbridge_server` | PC | WebSocket bridge for the web client (`:9090`) |
 | `nereo_controller_node` | `nereo_controller_node` | PC | PID / state-space controller (separate repo) |
 | `rov_sim_node` | `gui_pkg` | PC | Local ROV simulator (no hardware needed) |
-| `sim_dinamica` | `gui_pkg` | PC | Closed-loop simulator: thruster commands in, sensors out (branch `tesi-davide`) |
+| `sim_dinamica` | `gui_pkg` | PC | Closed-loop simulator: thruster commands in, sensors out (branch `tesi-davide` of `Davide-Colabella/nereo_ros2_code`) |
 | `sonar_sim_node` | `sonar_pkg` | PC | Synthetic sonar data |
 
 ### Topics
@@ -280,7 +280,7 @@ at the surface, or call `barometer_reset_reference` there.
 
 ### Guidance mode (`safety_node`, branch `tesi-davide`)
 
-For the autonomous mission software of the thesis (`nereo_mission_bridge` in [Tesi-Magistrale](https://github.com/Davide-Colabella/Tesi-Magistrale)) the safety node also owns the guidance mode, published latched on `/modalita_guida`:
+For the autonomous mission software of the thesis (`nereo_mission_bridge` in [Tesi-Magistrale](https://github.com/Davide-Colabella/Tesi-Magistrale)) the safety node of branch `tesi-davide` ([`Davide-Colabella/nereo_ros2_code`](https://github.com/Davide-Colabella/nereo_ros2_code/tree/tesi-davide)) also owns the guidance mode, published latched on `/modalita_guida`:
 
 | Mode | Motion commands | Arm requests |
 |---|---|---|
@@ -422,7 +422,7 @@ ros2 launch gui_pkg workstation.launch.py
 ```
 
 `rov_sim_node` is open loop: its sensors do not react to the commands. `sim_dinamica`
-(branch `tesi-davide`) closes the loop. It takes the place of the firmware
+(branch `tesi-davide` of `Davide-Colabella/nereo_ros2_code`) closes the loop. It takes the place of the firmware
 (`/nereo_cmd_vel`, `/set_arm_mode` → `/rov_armed`) and of the Pi sensors, on the same
 topics and QoS: barometer, IMU, Ping1D, diagnostics and tare services. It simulates depth,
 yaw, surge and sway with a first-order model; the values come from the thesis
