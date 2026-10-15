@@ -35,6 +35,7 @@ setup(
         'console_scripts': [
             'gui_node     = gui_pkg.gui_node:main',
             'rov_sim_node = gui_pkg.rov_sim_node:main',
+            'sim_dinamica = gui_pkg.sim_dinamica:main',
         ],
     },
 )

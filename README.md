@@ -170,6 +170,8 @@ nereo_ros2_code/
 │       │   ├── gui_pkg/
 │       │   │   ├── gui_node.py      # Main node + ROSQmlBridge / SonarBridge / ControllerBridge
 │       │   │   ├── rov_sim_node.py  # Full ROV simulator (IMU, barometer, cameras, joy)
+│       │   │   ├── sim_dinamica.py  # Closed-loop vehicle simulator (firmware + Pi sensors)
+│       │   │   ├── sim_model.py     # Its first-order dynamics, no ROS
 │       │   │   └── qml/             # QML UI
 │       │   │       ├── main.qml
 │       │   │       └── components/
@@ -213,6 +215,7 @@ nereo_ros2_code/
 | `rosbridge_websocket` | `rosbridge_server` | PC | WebSocket bridge for the web client (`:9090`) |
 | `nereo_controller_node` | `nereo_controller_node` | PC | PID / state-space controller (separate repo) |
 | `rov_sim_node` | `gui_pkg` | PC | Local ROV simulator (no hardware needed) |
+| `sim_dinamica` | `gui_pkg` | PC | Closed-loop simulator: thruster commands in, sensors out (branch `tesi-davide`) |
 | `sonar_sim_node` | `sonar_pkg` | PC | Synthetic sonar data |
 
 ### Topics
@@ -416,6 +419,20 @@ ros2 run sonar_pkg sonar_sim_node
 
 # Terminal 3 — workstation stack
 ros2 launch gui_pkg workstation.launch.py
+```
+
+`rov_sim_node` is open loop: its sensors do not react to the commands. `sim_dinamica`
+(branch `tesi-davide`) closes the loop. It takes the place of the firmware
+(`/nereo_cmd_vel`, `/set_arm_mode` → `/rov_armed`) and of the Pi sensors, on the same
+topics and QoS: barometer, IMU, Ping1D, diagnostics and tare services. It simulates depth,
+yaw, surge and sway with a first-order model; the values come from the thesis
+`mission_env.m`. Do not run it together with `rov_sim_node` or the real vehicle. Faults
+can be injected at run time, for example
+`ros2 param set /sim_dinamica barometro_attivo false`. See
+`integration_tests/mission_bridge/README.md`.
+
+```bash
+ros2 run gui_pkg sim_dinamica --ros-args -p fondale_m:=6.0
 ```
 
 Open `http://localhost:8080` for the web controller and `http://localhost:8080/sim.html` for the top-down ROV simulator.

@@ -20,13 +20,30 @@ from nereo_mission_msgs.msg import Cmd, MissionStatusBus, PlanBus
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Float64MultiArray, UInt8
+from std_msgs.msg import Float32, Float64MultiArray, UInt8
 from std_srvs.srv import Trigger
 
 LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
+BEST_EFFORT = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 OVERRIDE_BUTTON = 1
 OPERATOR = 1   # AbortReason.OPERATOR
+
+
+NODES = ('safety_node', 'nereo_controller_node', 'nereo_mission_bridge', 'nereo_mission')
+
+
+def check_single_nodes(node, check, nodes=NODES, seconds=3.0):
+    """Every node of the test runs once: a node left over from an earlier run
+    (same domain) would publish on the same topics."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        rclpy.spin_once(node, timeout_sec=0.05)
+    names = [n for n, _ in node.get_node_names_and_namespaces()]
+    dup = sorted({n for n in names if names.count(n) > 1})
+    missing = [n for n in nodes if n not in names]
+    return check(not dup and not missing, 'each node once (duplicates %s, missing %s)' % (
+        dup, missing))
 
 
 class Pilot(Node):
@@ -37,6 +54,7 @@ class Pilot(Node):
         self.status = None
         self.setpoints = None
         self.fw_cmds = []
+        self.depth = None
         self.ok = True
         self.create_subscription(UInt8, '/modalita_guida',
                                  lambda m: setattr(self, 'mode', m.data), LATCHED)
@@ -45,6 +63,8 @@ class Pilot(Node):
                                  lambda m: setattr(self, 'setpoints', list(m.data)), 10)
         self.create_subscription(CommandVelocity, '/nereo_cmd_vel',
                                  lambda m: self.fw_cmds.append(list(m.cmd_vel)), 10)
+        self.create_subscription(Float32, '/barometer_depth',
+                                 lambda m: setattr(self, 'depth', m.data), BEST_EFFORT)
         self.p_plan = self.create_publisher(PlanBus, 'missione/plan', LATCHED)
         self.p_cmd = self.create_publisher(Cmd, 'missione/cmd', 10)
         self.p_joy = self.create_publisher(Joy, 'joy', 10)
@@ -95,6 +115,7 @@ def main():
     p = Pilot()
 
     # 1. start
+    check_single_nodes(p, p.check)
     p.check(p.wait_for(lambda: p.mode is not None, 10.0) and p.mode == 0,
             'guidance mode MANUAL at start')
     p.check(p.auto_srv.wait_for_service(timeout_sec=10.0), 'selector service available')
@@ -143,15 +164,20 @@ def main():
     p.check(p.wait_for(lambda: p.status.state == 4, 3.0) and p.status.abort_reason == OPERATOR,
             'chart in Abort with reason OPERATOR')
     # the controller computes (and publishes its setpoints) only when it gets an
-    # input: in MANUAL that is the joystick in controller mode, through safety_node
+    # input: in MANUAL that is the joystick in controller mode, through safety_node.
+    # Target released (mask 0): the depth goes back to the parameters, i.e. the
+    # measured depth captured at the release (0 with fake_vehicle)
     back = False
     end = time.monotonic() + 3.0
     while time.monotonic() < end and not back:
         p.p_joy_ctrl.publish(CommandVelocity())
         p.spin_for(0.1)
-        back = p.setpoints is not None and abs(p.setpoints[0]) < 1e-6
+        back = (p.setpoints is not None and p.depth is not None and
+                abs(p.setpoints[0] - p.depth) < 0.1 and p.setpoints[0] != 0.5)
     p.check(back, 'pilot input forwarded in MANUAL, controller depth back to the parameters '
-            '(measured 0.0): setpoints %s' % ([round(x, 3) for x in (p.setpoints or [])]))
+            '(measured %s): setpoints %s' % (
+                None if p.depth is None else round(p.depth, 3),
+                [round(x, 3) for x in (p.setpoints or [])]))
 
     # 6. AUTONOMOUS refused in Abort
     r = p.request_autonomous()
