@@ -85,7 +85,7 @@ Rectangle {
                 Text { text: "👮🏻"; color: parent.border.color; font.pixelSize: 18; font.bold: true; anchors.centerIn: parent }
                 ToolTip.visible: ctrlMouseArea.containsMouse
                 ToolTip.delay: 500
-                ToolTip.text: root.controlActive ? "Modalità CONTROLLORE → /nereo_cmd_vel_no_fb" : "Modalità DIRETTA → /nereo_cmd_vel"
+                ToolTip.text: root.controlActive ? "Modalità CONTROLLORE → /nereo_cmd_vel_no_fb_manual" : "Modalità DIRETTA → /nereo_cmd_vel"
                 MouseArea { id: ctrlMouseArea; anchors.fill: parent; hoverEnabled: true }
             }
         }

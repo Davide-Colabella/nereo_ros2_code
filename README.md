@@ -229,9 +229,15 @@ nereo_ros2_code/
 | `sonar_node` / `sonar_sim_node` | `sonar/confidence` | `std_msgs/Int32` | `gui_node` |
 | `sonar_node` / `sonar_sim_node` | `sonar/profile` | `std_msgs/Float32MultiArray` | `gui_node` |
 | `joy_to_cmd_vel` | `/nereo_cmd_vel_joy` | `nereo_interfaces/CommandVelocity` | `safety_node` |
-| `joy_to_cmd_vel` | `/nereo_cmd_vel_no_fb` | `nereo_interfaces/CommandVelocity` | `nereo_controller_node` |
+| `joy_to_cmd_vel` | `/nereo_cmd_vel_no_fb_manual` | `nereo_interfaces/CommandVelocity` | `safety_node` (forwarded to `/nereo_cmd_vel_no_fb` in MANUAL) |
+| `nereo_mission_bridge` (thesis) | `/nereo_cmd_vel_no_fb_auto` | `nereo_interfaces/CommandVelocity` | `safety_node` (forwarded to `/nereo_cmd_vel_no_fb` in AUTONOMOUS) |
+| `safety_node` | `/nereo_cmd_vel_no_fb` | `nereo_interfaces/CommandVelocity` | `nereo_controller_node` |
 | `joy_to_cmd_vel` | `/joy_control_active` | `std_msgs/Bool` | `gui_node`, web |
-| `joy_to_cmd_vel` / web | `/set_arm_mode` | `std_msgs/Bool` | ROV firmware |
+| `joy_to_cmd_vel` / GUI / web | `/set_arm_mode_manual` | `std_msgs/Bool` | `safety_node` (forwarded in MANUAL) |
+| `nereo_mission_bridge` (thesis) | `/set_arm_mode_auto` | `std_msgs/Bool` | `safety_node` (forwarded in AUTONOMOUS) |
+| `safety_node` | `/set_arm_mode` | `std_msgs/Bool` | ROV firmware |
+| `safety_node` | `/modalita_guida` (latched) | `std_msgs/UInt8` (0 MANUAL, 1 AUTONOMOUS) | `nereo_mission_bridge` |
+| `nereo_mission_bridge` (thesis) | `/missione/stato` | `std_msgs/UInt8` (mission chart state) | `safety_node` |
 | `nereo_controller_node` | `/nereo_cmd_vel_ctrl` (controller mode) | `nereo_interfaces/CommandVelocity` | `safety_node` |
 | `nereo_controller_node` | `/controller/setpoints` | `std_msgs/Float64MultiArray` | tuner GUI |
 | `nereo_controller_node` | `/controller/errors` | `std_msgs/Float64MultiArray` | tuner GUI |
@@ -268,6 +274,25 @@ at the surface, or call `barometer_reset_reference` there.
 | Web silent 1–1.5 s | Command ramped to zero |
 | Web silent > 1.5 s | Zero command sent |
 | No source active | Zero command sent |
+
+### Guidance mode (`safety_node`, branch `tesi-davide`)
+
+For the autonomous mission software of the thesis (`nereo_mission_bridge` in [Tesi-Magistrale](https://github.com/Davide-Colabella/Tesi-Magistrale)) the safety node also owns the guidance mode, published latched on `/modalita_guida`:
+
+| Mode | Motion commands | Arm requests |
+|---|---|---|
+| MANUAL (start) | joystick (direct and through the controller), web | joystick, GUI, web |
+| AUTONOMOUS | mission bridge only, through the controller | mission bridge only |
+
+The safety node is the only publisher of `/nereo_cmd_vel`, `/nereo_cmd_vel_no_fb` and `/set_arm_mode`. It forwards only the source of the current mode.
+
+- **Back to MANUAL:** the joystick override button (`btn_override`, default 1 = Xbox B / DS5 Circle) or the service `/modalita_guida/richiedi_manuale` always go back to MANUAL, from any state. The mission bridge then aborts the mission.
+- **To AUTONOMOUS:** only on request, through the service `/modalita_guida/richiedi_autonoma` or the optional `btn_autonomous` button (disabled by default). The request is refused unless the mission state on `/missione/stato` is fresh (within 2 s) and is neither Mission nor Abort.
+
+```bash
+ros2 service call /modalita_guida/richiedi_autonoma std_srvs/srv/Trigger
+ros2 service call /modalita_guida/richiedi_manuale std_srvs/srv/Trigger
+```
 
 ### Architecture diagram
 

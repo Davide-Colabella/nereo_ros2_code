@@ -18,8 +18,8 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 # Button presets (ros2 run joy joy_node, Linux hidraw driver)
-#   DS5:        btn_arm=10 (PS)    btn_mode=8 (Share)
-#   Xbox One S: btn_arm=8  (Xbox)  btn_mode=6 (View)
+#   DS5:        btn_arm=10 (PS)    btn_mode=8 (Share)   btn_override=1 (Circle)
+#   Xbox One S: btn_arm=8  (Xbox)  btn_mode=6 (View)    btn_override=1 (B)
 
 # Controller package lives in a separate workspace; we source its install
 # overlay automatically so the user doesn't have to source two workspaces.
@@ -114,6 +114,10 @@ def generate_launch_description():
         package='web_pkg',
         executable='safety_node',
         name='safety_node',
+        parameters=[{
+            'override_button':   LaunchConfiguration('btn_override'),
+            'autonomous_button': LaunchConfiguration('btn_autonomous'),
+        }],
     )
     # Started via its own launch file (not a bare Node) so it loads its
     # checked-in params YAML the same way the standalone controller launch
@@ -150,6 +154,11 @@ def generate_launch_description():
                               description='Arm/disarm button index (Xbox: 8, DS5: 10)'),
         DeclareLaunchArgument('btn_mode',  default_value='6',
                               description='Mode toggle button index (Xbox: 6, DS5: 8)'),
+        DeclareLaunchArgument('btn_override', default_value='1',
+                              description='Guidance override button: back to MANUAL (Xbox B / DS5 Circle: 1)'),
+        DeclareLaunchArgument('btn_autonomous', default_value='-1',
+                              description='Button requesting AUTONOMOUS mode (-1: only the '
+                                          '/modalita_guida/richiedi_autonoma service)'),
         DeclareLaunchArgument('control_mode', default_value='0',
                               description='Nereo controller start mode (0=passthrough,1=PID,2=PID-AW,3=CS)'),
 

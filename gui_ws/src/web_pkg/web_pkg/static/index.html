@@ -177,7 +177,7 @@ const cmdVelTopic = new ROSLIB.Topic({
   queue_size: 1, latch: false
 });
 const armTopic = new ROSLIB.Topic({
-  ros, name: '/set_arm_mode', messageType: 'std_msgs/Bool'
+  ros, name: '/set_arm_mode_manual', messageType: 'std_msgs/Bool'
 });
 
 new ROSLIB.Topic({ ros, name: '/rov_armed', messageType: 'std_msgs/Bool' })

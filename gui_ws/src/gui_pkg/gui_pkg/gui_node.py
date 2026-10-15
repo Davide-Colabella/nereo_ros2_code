@@ -345,7 +345,8 @@ class ROSQmlBridge(QObject):
         self.last_joy_time = None
         self.last_rov_armed_time = None
 
-        self.arm_pub = self.node.create_publisher(Bool, '/set_arm_mode', 10)
+        # arm requests go through safety_node (forwarded only in MANUAL mode)
+        self.arm_pub = self.node.create_publisher(Bool, '/set_arm_mode_manual', 10)
         self.node.create_subscription(
             Bool, '/rov_armed', self.rov_armed_callback, PoliciesUtils.sensor_qos)
 

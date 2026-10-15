@@ -76,9 +76,11 @@ class JoyToCmdVelNode(Node):
         self._last_joy_stamp = None
 
         self._pub_direct     = self.create_publisher(CommandVelocity, '/nereo_cmd_vel_joy',   10)
-        self._pub_controller = self.create_publisher(CommandVelocity, '/nereo_cmd_vel_no_fb', 10)
+        # controller-mode output and arm requests go through safety_node, which
+        # forwards them to /nereo_cmd_vel_no_fb and /set_arm_mode in MANUAL mode only
+        self._pub_controller = self.create_publisher(CommandVelocity, '/nereo_cmd_vel_no_fb_manual', 10)
         self._pub_active     = self.create_publisher(Bool, '/joy_control_active', 10)
-        self._arm_pub        = self.create_publisher(Bool, '/set_arm_mode', 10)
+        self._arm_pub        = self.create_publisher(Bool, '/set_arm_mode_manual', 10)
 
         _best_effort_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -112,7 +114,7 @@ class JoyToCmdVelNode(Node):
             state_msg = Bool()
             state_msg.data = self._controller_mode
             self._pub_active.publish(state_msg)
-            mode = 'CONTROLLER (/nereo_cmd_vel_no_fb)' if self._controller_mode else 'DIRECT (/nereo_cmd_vel_joy)'
+            mode = 'CONTROLLER (/nereo_cmd_vel_no_fb_manual)' if self._controller_mode else 'DIRECT (/nereo_cmd_vel_joy)'
             self.get_logger().info(f'Mode → {mode}')
 
         # Arm toggle
