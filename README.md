@@ -294,6 +294,18 @@ ros2 service call /modalita_guida/richiedi_autonoma std_srvs/srv/Trigger
 ros2 service call /modalita_guida/richiedi_manuale std_srvs/srv/Trigger
 ```
 
+Checked by `web_pkg/test/test_safety_node_sources.py` (safety_node run in process):
+- **AUTONOMOUS:** none of these reaches the firmware or the controller input:
+  - the web joystick (`/web_cmd_vel`);
+  - the GUI and web arm button (`/set_arm_mode_manual`);
+  - the joystick, direct and in controller mode;
+  - a web command held just before the switch.
+- **AUTONOMOUS:** the bridge commands do reach the firmware and the controller.
+- **MANUAL:** the GUI and web commands are forwarded, and are forwarded again after the override.
+- **Static check:** `gui_node` and `index.html` use none of the topics owned by safety_node.
+
+Not covered by safety_node: rosbridge (port 9090) lets any web client publish on any topic, so a client other than `index.html` could still publish `/nereo_cmd_vel` or `/set_arm_mode` directly. The same holds for anything running on the ROS network, such as the GUI's parameter panel and the tare buttons. On the vehicle, rosbridge should be limited to the topics of `index.html`. In the rosbridge of RoboStack Jazzy the parameter is `topics_pub_glob`; check the name on the installed version.
+
 ### Architecture diagram
 
 ```mermaid
