@@ -12,7 +12,7 @@
   <depend>std_srvs</depend>
   <depend>nereo_interfaces</depend>
 
-  <exec_depend>ros-humble-joy</exec_depend>
+  <exec_depend>joy</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

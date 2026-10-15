@@ -30,7 +30,7 @@ setup(
     maintainer_email='davidecola16@gmail.com',
     description='GUI for PoliTOcean Nereo ROV using QML',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'gui_node     = gui_pkg.gui_node:main',

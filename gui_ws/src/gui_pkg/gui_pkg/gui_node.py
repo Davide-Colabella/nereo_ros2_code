@@ -745,7 +745,7 @@ def main():
 
     video_provider.cleanup()
     node.destroy_node()
-    rclpy.shutdown()
+    rclpy.try_shutdown()
     sys.exit(exit_code)
 
 if __name__ == '__main__':

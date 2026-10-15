@@ -2,7 +2,7 @@
 
 Code for the **Nereo** ROV by PoliTOcean.
 
-The project is split into two ROS 2 (Humble) workspaces:
+The project is split into two ROS 2 (Jazzy) workspaces (Ubuntu 24.04; ported from Humble, see [`PORTING_JAZZY.md`](PORTING_JAZZY.md)):
 
 | Workspace | Side | Purpose |
 |---|---|---|
@@ -54,16 +54,16 @@ git clone https://github.com/PoliTOcean/ros2_controller_tuning_aid.git
 ```bash
 sudo apt update
 sudo apt install \
-    ros-humble-rosbridge-suite \
-    ros-humble-tf-transformations \
+    ros-jazzy-rosbridge-suite \
+    ros-jazzy-tf-transformations \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-base gstreamer1.0-tools \
     python3-qrcode python3-pil
 ```
 
 | Package | Used by | Why it's needed |
 |---|---|---|
-| `ros-humble-rosbridge-suite` | `web_pkg` | WebSocket bridge for the web controller (port 9090) |
-| `ros-humble-tf-transformations` | `gui_pkg` | Quaternion → RPY conversion in the GUI |
+| `ros-jazzy-rosbridge-suite` | `web_pkg` | WebSocket bridge for the web controller (port 9090) |
+| `ros-jazzy-tf-transformations` | `gui_pkg` | Quaternion → RPY conversion in the GUI |
 | `gstreamer1.0-plugins-*` | `gui_pkg` | Live H.264/UDP video from the ROV cameras |
 | `python3-qrcode`, `python3-pil` | `gui_pkg` | Generates the QR code shown on `Ctrl+Q` for the web controller URL |
 

@@ -18,7 +18,7 @@ setup(
     maintainer_email='davidecola16@gmail.com',
     description='Web-based ROV controller with rosbridge WebSocket bridge',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'web_server_node = web_pkg.web_server_node:main',

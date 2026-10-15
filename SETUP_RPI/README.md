@@ -1,5 +1,5 @@
 # Configure Main Computer: Raspberry Pi 5
-1. Flash the image on the SD card: using Raspberry PI Imager, flash the Ubuntu Server 24.04 LTS (noble, 64bit) image on the SD card, at least 32GB. User: `pi`, Password: `raspberry`. The Pi runs ROS 2 Jazzy, not Humble as the workstation does.
+1. Flash the image on the SD card: using Raspberry PI Imager, flash the Ubuntu Server 24.04 LTS (noble, 64bit) image on the SD card, at least 32GB. User: `pi`, Password: `raspberry`. The Pi runs ROS 2 Jazzy, like the workstation (see `PORTING_JAZZY.md`).
 2. After the image is flashed, boot the raspberry PI and connect to a shell, either through monitor and keyboard, or connecting it to a router with DHCP, or by configuring the access to a WiFi during the 1st step.
 3. Network configuration: you should edit the `/etc/netplan/50-cloud-init.yaml` and add this part:
 ```yaml

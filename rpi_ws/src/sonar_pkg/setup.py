@@ -16,7 +16,7 @@ setup(
     maintainer_email='davidecola16@gmail.com',
     description='Ping1D sonar driver node for PoliTOcean Nereo ROV',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'sonar_node     = sonar_pkg.sonar_node:main',

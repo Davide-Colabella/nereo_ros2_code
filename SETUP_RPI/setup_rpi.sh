@@ -69,7 +69,7 @@ git clone https://github.com/NvChad/starter ~/.config/nvim
 echo -e "${RED}Done! Run :MasonInstallAll after nvchad is done installing."
 echo -e "Then delete ~/.config/nvim/.git${NC}"
 
-echo "Installing ROS2 Humble..."
+echo "Installing ROS2 Jazzy..."
 
 sudo apt install software-properties-common
 sudo add-apt-repository universe
@@ -78,9 +78,9 @@ sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 sudo apt update
 sudo apt upgrade -y
-sudo apt install ros-humble-ros-base -y
+sudo apt install ros-jazzy-ros-base -y
 sudo apt install ros-dev-tools -y
-echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 
 echo "${GREEN}Done.${NC}"

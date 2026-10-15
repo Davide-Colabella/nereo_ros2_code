@@ -19,7 +19,7 @@ setup(
     maintainer_email='davidecola16@gmail.com',
     description='Joystick to CommandVelocity node for PoliTOcean Nereo ROV',
     license='Apache-2.0',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'joy_to_cmdvel    = joystick_pkg.joy_to_cmdvel:main',

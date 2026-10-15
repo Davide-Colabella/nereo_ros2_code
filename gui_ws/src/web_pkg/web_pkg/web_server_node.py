@@ -4,7 +4,6 @@ Open http://<workstation-ip>:8080 from any device on the same network.
 """
 import atexit
 import os
-import signal
 import socket
 import threading
 import http.server
@@ -70,21 +69,12 @@ def main(args=None):
     rclpy.init(args=args)
     node = WebServerNode()
 
-    # rclpy installs its own SIGINT/SIGTERM handlers that stop the spin
-    # without raising KeyboardInterrupt, so the finally-clause cleanup is
-    # not guaranteed to run early enough — register the teardown with
-    # atexit and with explicit signal handlers as belt + suspenders so
-    # port 8080 is always released before the process exits.
+    # Port release on exit: the finally clause below, plus atexit as a
+    # fallback. No custom SIGINT/SIGTERM handler: on Jazzy replacing rclpy's
+    # handler leaves rclpy.spin() blocked in its wait set, so the process
+    # never exits and keeps port 8080 bound. rclpy's own handler makes spin()
+    # raise KeyboardInterrupt, which the try below already handles.
     atexit.register(node.shutdown_http)
-
-    def _handle_term(_signum, _frame):
-        node.shutdown_http()
-        # Let rclpy's own handler still run (it was installed first by
-        # rclpy.init) — re-raise as KeyboardInterrupt to break the spin.
-        raise KeyboardInterrupt
-
-    signal.signal(signal.SIGINT,  _handle_term)
-    signal.signal(signal.SIGTERM, _handle_term)
 
     try:
         rclpy.spin(node)
