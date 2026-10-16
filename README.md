@@ -428,7 +428,8 @@ topics and QoS: barometer, IMU, Ping1D, diagnostics and tare services. It simula
 yaw, surge and sway with a first-order model; the values come from the thesis
 `mission_env.m`. Do not run it together with `rov_sim_node` or the real vehicle. Faults
 can be injected at run time, for example
-`ros2 param set /sim_dinamica barometro_attivo false`. See
+`ros2 param set /sim_dinamica barometro_attivo false`, and the vehicle turned with
+`ros2 param set /sim_dinamica yaw_iniziale 1.0`. See
 `integration_tests/mission_bridge/README.md`.
 
 ```bash

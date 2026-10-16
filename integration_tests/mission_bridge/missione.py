@@ -6,7 +6,9 @@ list of states the chart went through and "RESULT PASS" or "RESULT FAIL".
   python3 missione.py <scenario>
 
   completa  plan of three tasks (HOLD, TRANSECT, ALTITUDE_HOLD) from Ready to
-            Surfaced and back to Ready, all driven by the bridge in AUTONOMOUS
+            Surfaced and back to Ready, all driven by the bridge in AUTONOMOUS;
+            the vehicle is turned to YAW_START after the tare and must keep that
+            yaw in the descent
   batteria  battery under P_BATT_ABORT (25 %) during HOLD: watchdog, Abort
             with reason BATTERY, emergency ascent, Surfaced, Ready
   barometro barometer lost during HOLD: health CRITICAL, FaultSafe with reason
@@ -17,7 +19,7 @@ list of states the chart went through and "RESULT PASS" or "RESULT FAIL".
             disarms at the surface: Surfaced, Ready
 
 Faults are injected through parameters: banco.batteria_pct of the bridge (bench
-battery), barometro_attivo of sim_dinamica.
+battery), barometro_attivo and yaw_iniziale of sim_dinamica.
 """
 import math
 import sys
@@ -60,6 +62,8 @@ PLAN = [(1, 2.0, 0.0, 0.0, 20.0, 0.0),
         (2, 2.0, HEADING, 0.25, 20.0, 0.0),
         (3, 0.0, HEADING, 0.0, 20.0, 2.0)]
 OVERRIDE_BUTTON = 1
+YAW_START = 1.0   # completa: yaw set after the tare, kept in the descent
+DESCENT = ('LeaveSurface', 'DescendToDepth', 'SettleAtDepth')
 
 
 NODES = ('safety_node', 'nereo_controller_node', 'nereo_mission_bridge', 'nereo_mission')
@@ -76,6 +80,10 @@ def check_single_nodes(node, check, nodes=NODES, seconds=3.0):
     missing = [n for n in nodes if n not in names]
     return check(not dup and not missing, 'each node once (duplicates %s, missing %s)' % (
         dup, missing))
+
+
+def wrap(a):
+    return math.atan2(math.sin(a), math.cos(a))
 
 
 def name(sub):
@@ -221,12 +229,18 @@ class Scenario(Node):
 
     # ── common part: from start to Mission ────────────────────────────────
 
-    def start_mission(self):
+    def start_mission(self, yaw=None):
+        """From the start to Mission; yaw: turn the vehicle there in Ready, after the tare."""
         check_single_nodes(self, self.check, NODES + ('sim_dinamica',))
         self.check(self.wait_for(lambda: self.mode is not None, 10.0) and self.mode == 0,
                    'guidance mode MANUAL at start')
         self.check(self.wait_for(lambda: self.status is not None and self.status.state == READY,
                                  60.0), 'chart in Ready')
+        if yaw is not None:
+            ok = self.set_params(self.sim_params, yaw_iniziale=yaw) and self.wait_for(
+                lambda: self.truth and abs(wrap(self.truth[2] - yaw)) < 1e-3, 2.0)
+            self.check(ok, 'vehicle turned to %.2f rad after the tare (yaw %.3f rad)' % (
+                yaw, self.truth[2] if self.truth else float('nan')))
         self.publish_plan()
         self.spin_for(0.5)
         r = self.call(self.auto_srv, Trigger.Request())
@@ -253,8 +267,18 @@ class Scenario(Node):
 # ── scenarios ─────────────────────────────────────────────────────────────
 
 def completa(s):
-    if not s.start_mission():
+    if not s.start_mission(yaw=YAW_START):
         return
+    # the chart descends on the current heading (LeaveSurface: setpoint.heading = nav.yaw)
+    descent = []
+    while s.in_sub(*DESCENT):
+        s.spin_for(0.1)
+        if s.truth and s.in_sub(*DESCENT):
+            descent.append(s.truth[2])
+    dev = max((abs(wrap(y - YAW_START)) for y in descent), default=float('inf'))
+    s.check(len(descent) > 10 and dev < 0.05,
+            'descent: yaw within 0.05 rad of %.2f (max deviation %.3f rad, %d samples)' % (
+                YAW_START, dev, len(descent)))
     depth = s.track('Hold', 60.0, lambda x: x[1])
     s.check(depth and max(abs(d - 2.0) for d in depth[2:]) < 0.2,
             'HOLD: depth within 0.2 m of 2.0 (%.2f .. %.2f m)' % (

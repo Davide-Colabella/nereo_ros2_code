@@ -24,9 +24,13 @@ on the same topics and QoS:
 Dynamics: gui_pkg/sim_model.py (first order per axis, values from
 modello/mission_env.m of the thesis). Sensors are best effort, as on the Pi.
 
-Faults at run time, with ros2 param set /sim_dinamica <name> <value>:
+Faults and changes at run time, with ros2 param set /sim_dinamica <name> <value>:
   barometro_attivo, imu_attiva, sonar_attivo   false: the sensor stops publishing
   fondale_m                                    seabed depth
+  yaw_iniziale                                 yaw of the vehicle [rad, world frame]: at
+                                               start, and when set the vehicle is turned
+                                               there at once (yaw rate 0), as a pilot
+                                               would; the IMU reads it relative to its tare
 """
 import math
 import time
@@ -59,7 +63,7 @@ class SimDinamica(Node):
                 ('imbardata_max_rad_s', d.yaw_rate_max_rad_s),
                 ('tau_verticale_s', d.tau_vert_s), ('tau_avanzamento_s', d.tau_surge_s),
                 ('tau_laterale_s', d.tau_sway_s), ('tau_imbardata_s', d.tau_yaw_s),
-                ('profondita_iniziale_m', 0.0), ('imbardata_iniziale_rad', 0.0),
+                ('profondita_iniziale_m', 0.0), ('yaw_iniziale', 0.0),
                 ('ping1d_angolo_rad', 0.0), ('cmd_timeout_s', 0.5), ('passo_s', 0.02)):
             self.declare_parameter(name, value)
         for name in ('barometro_attivo', 'imu_attiva', 'sonar_attivo'):
@@ -72,7 +76,7 @@ class SimDinamica(Node):
             tau_vert_s=g('tau_verticale_s'), tau_surge_s=g('tau_avanzamento_s'),
             tau_sway_s=g('tau_laterale_s'), tau_yaw_s=g('tau_imbardata_s')))
         self.model.s.depth = g('profondita_iniziale_m')
-        self.model.s.yaw = g('imbardata_iniziale_rad')
+        self.model.s.yaw = wrap(g('yaw_iniziale'))
         self.active = {n: g(n) for n in ('barometro_attivo', 'imu_attiva', 'sonar_attivo')}
         self.add_on_set_parameters_callback(self._on_params)
 
@@ -122,6 +126,12 @@ class SimDinamica(Node):
                 if prm.value <= 0.0:
                     return SetParametersResult(successful=False, reason='fondale_m > 0')
                 self.model.p.bottom_m = float(prm.value)
+            elif prm.name == 'yaw_iniziale':
+                if not math.isfinite(prm.value):
+                    return SetParametersResult(successful=False, reason='yaw_iniziale finite')
+                self.model.s.yaw = wrap(float(prm.value))
+                self.model.s.r = 0.0
+                self.get_logger().info('yaw set to %.3f rad' % self.model.s.yaw)
         return SetParametersResult(successful=True)
 
     # ── firmware ───────────────────────────────────────────────────────────

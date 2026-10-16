@@ -75,7 +75,7 @@ Faults at run time:
 ros2 param set /sim_dinamica barometro_attivo false
 ```
 
-The same works for `imu_attiva`, `sonar_attivo` and `fondale_m`. The bench battery of the bridge is changed with `banco.batteria_pct`.
+The same works for `imu_attiva`, `sonar_attivo` and `fondale_m`. `yaw_iniziale` (rad, world frame, default 0) is the yaw at start; set at run time it turns the vehicle there at once, as a pilot would, and the IMU reads it relative to its tare. The bench battery of the bridge is changed with `banco.batteria_pct`.
 
 With `SIM=dinamica` the controller runs with **test gains** for the simulator, not tuned on the vehicle:
 - `control_mode` 2 (PID with anti-windup);
@@ -96,7 +96,7 @@ Plan, published by the scenario (seabed at 4.5 m, `max_depth` 4 m):
 
 | Scenario | Event | Expected |
 |---|---|---|
-| `completa` | none | Ready → Mission (the three tasks) → Surfaced → Ready, `mission_done`, no abort reason. Checks on the simulator: depth within 0.2 m in HOLD, turn to the transect heading in TrAlign, heading and course of the transect, altitude at the end of ALTITUDE_HOLD |
+| `completa` | none | Ready → Mission (the three tasks) → Surfaced → Ready, `mission_done`, no abort reason. After the tare, in Ready, the vehicle is turned to 1.0 rad (`yaw_iniziale`). Checks on the simulator: yaw within 0.05 rad of 1.0 rad in the descent (LeaveSurface, DescendToDepth, SettleAtDepth), depth within 0.2 m in HOLD, turn to the transect heading in TrAlign, heading and course of the transect, altitude at the end of ALTITUDE_HOLD |
 | `batteria` | bench battery at 20 % (`P_BATT_ABORT` 25 %) during HOLD | watchdog → Abort with reason BATTERY → emergency ascent → Surfaced → Ready |
 | `barometro` | barometer silent during HOLD | health CRITICAL → FaultSafe with reason CRITICAL → disarm (FsLatched). The vehicle floats up; RESET is refused while the barometer is missing. Barometer back → RESET → FsResetting → Boot → Ready |
 | `override` | joystick override during the transect | MANUAL → Abort with reason OPERATOR, AUTONOMOUS refused. The pilot brings the vehicle up with the joystick (direct mode) and disarms at the surface → Surfaced → Ready |
@@ -133,7 +133,11 @@ Bags (`ros2 bag record -a`, mcap, 1 to 3 MB per run) are kept with the thesis:
 `ros2/prove_integrazione` in `Tesi-Magistrale`, branch `modello-stateflow`.
 
 What the closed loop does not show:
-- **Heading in the other DEPTH_HOLD states:** the chart writes `setpoint.heading` only in Hold, TrAlign, TrRun and GtAlign; in the descent, PrepareTask, AltAcquire and AbStopHorizontal the bridge follows the last value written (0, the heading at the IMU tare, before the first task). Here the vehicle starts at yaw 0, so no turn shows in the descent.
+- **Heading in the descent:** in the runs above the generated code wrote `setpoint.heading` only in Hold, TrAlign, TrRun and GtAlign, so in the descent the bridge followed 0, the heading at the IMU tare; the vehicle started at yaw 0 and no turn showed.
+
+### Descent heading (16/10/2026)
+
+The chart specification (`spec.py` in Tesi-Magistrale, `modello-stateflow`) now sets `setpoint.heading = nav.yaw` on entering LeaveSurface and the task heading in AltAcquire; `completa` turns the vehicle to 1.0 rad after the tare and checks the descent yaw. **Until `modello/codegen` is regenerated in MATLAB, `completa` fails on that check**: with the current generated code the vehicle turns back to the tare heading in the descent (deviation 1.045 rad). With a copy of `mission_chart.cpp` patched by hand with the two assignments, outside the repository (`TESI_WS` built with `-DMISSION_CHART_CODEGEN_DIR`), `completa` passes with deviation 0.000 rad over 190 samples, and `batteria`, `barometro` and `override` pass too.
 - **Simulator values:** the values not taken from `mission_env.m` and the controller gains are not vehicle values: the times and margins above are about the software chain, not the vehicle.
 - **Roll and pitch:** not simulated.
 - **Noise and losses:** no sensor noise and no packet loss, apart from the faults injected.
