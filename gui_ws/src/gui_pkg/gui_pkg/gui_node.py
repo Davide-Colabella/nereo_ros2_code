@@ -21,7 +21,6 @@ from gi.repository import Gst
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
@@ -170,7 +169,7 @@ class SonarRenderer:
         self._wf_image       = self._blank_image(SONAR_W, SONAR_H)
         self._ascan_image    = self._blank_image(ASCAN_W, SONAR_H)
 
-        self._colormap       = cm.get_cmap('turbo')
+        self._colormap       = matplotlib.colormaps['turbo']   # cm.get_cmap: removed in matplotlib 3.9
 
     @staticmethod
     def _blank_image(w, h):
