@@ -69,13 +69,18 @@ DESCENT = ('LeaveSurface', 'DescendToDepth', 'SettleAtDepth')
 NODES = ('safety_node', 'nereo_controller_node', 'nereo_mission_bridge', 'nereo_mission')
 
 
-def check_single_nodes(node, check, nodes=NODES, seconds=3.0):
+def check_single_nodes(node, check, nodes=NODES, seconds=3.0, timeout=15.0):
     """Every node of the test runs once: a node left over from an earlier run
-    (same domain) would publish on the same topics."""
-    end = time.monotonic() + seconds
-    while time.monotonic() < end:
+    (same domain) would publish on the same topics. Waits at least seconds, so
+    that a duplicate has time to show up, and then up to timeout for the nodes
+    discovery has not reported yet (slow after a fresh build)."""
+    start = time.monotonic()
+    while True:
         rclpy.spin_once(node, timeout_sec=0.05)
-    names = [n for n, _ in node.get_node_names_and_namespaces()]
+        names = [n for n, _ in node.get_node_names_and_namespaces()]
+        elapsed = time.monotonic() - start
+        if elapsed >= timeout or (elapsed >= seconds and all(n in names for n in nodes)):
+            break
     dup = sorted({n for n in names if names.count(n) > 1})
     missing = [n for n in nodes if n not in names]
     return check(not dup and not missing, 'each node once (duplicates %s, missing %s)' % (
