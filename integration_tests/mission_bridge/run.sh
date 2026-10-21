@@ -3,14 +3,18 @@
 # /controller/target, against a simulated vehicle. See README.md.
 #
 #   NEREO_GUI_WS=<gui_ws install>  CONTROLLER_WS=<ros2_controller_tuning_aid install> \
-#   TESI_WS=<Tesi-Magistrale ros2 install>  [SIM=fake|dinamica] [SCENARIO=...] [BAG=0|1] \
+#   TESI_WS=<Tesi-Magistrale ros2 install>  [SIM=fake|dinamica|stonefish] [SCENARIO=...] [BAG=0|1] \
 #   ./run.sh
 #
 # SIM=fake (default): fake_vehicle.py, sensors fixed at the surface; scenario
 #   pilot.py (SCENARIO=base, the only one).
 # SIM=dinamica: sim_dinamica of gui_pkg, closed loop; SCENARIO=base, completa
 #   (default), batteria, barometro or override (missione.py).
-# BAG=1 (default with SIM=dinamica) records all topics with ros2 bag in
+# SIM=stonefish: Stonefish with Tesi-Magistrale/stonefish/data/nereo.scn and
+#   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
+#   GUI=1 opens the Stonefish window (default: no window). TESI_DIR: the
+#   Tesi-Magistrale clone (default ../Tesi-Magistrale next to this repo, or ~/Tesi-Magistrale).
+# BAG=1 (default with SIM=dinamica or stonefish) records all topics with ros2 bag in
 #   $LOG/bag_<scenario>.
 # Defaults: the install folders next to the sources.
 set -u
@@ -21,20 +25,28 @@ REPO="$(cd "$HERE/../.." && pwd)"
 : "${TESI_WS:=$REPO/../Tesi-Magistrale/ros2/install}"
 : "${ROS_DOMAIN_ID:=77}"
 : "${SIM:=fake}"
-if [ "$SIM" = dinamica ]; then : "${SCENARIO:=completa}" "${BAG:=1}"; else : "${SCENARIO:=base}" "${BAG:=0}"; fi
+if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then : "${SCENARIO:=completa}" "${BAG:=1}"; else : "${SCENARIO:=base}" "${BAG:=0}"; fi
 export ROS_DOMAIN_ID
 LOG="${LOG_DIR:-$(mktemp -d)}"
 mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
   fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
+  stonefish/base|stonefish/completa|stonefish/batteria|stonefish/barometro|stonefish/override) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
 set +u   # the colcon setup scripts use unset variables
-source "$NEREO_GUI_WS/setup.bash"
-source "$CONTROLLER_WS/setup.bash"
-source "$TESI_WS/setup.bash"
+# a single colcon workspace (all packages together) is fine too: missing folders are skipped
+for ws in "$NEREO_GUI_WS" "$CONTROLLER_WS" "$TESI_WS"; do
+  [ -f "$ws/setup.bash" ] && source "$ws/setup.bash"
+done
 set -u
+if [ "$SIM" = stonefish ]; then
+  : "${TESI_DIR:=$REPO/../Tesi-Magistrale}"
+  [ -d "$TESI_DIR/stonefish" ] || TESI_DIR="$HOME/Tesi-Magistrale"
+  SF_DATA="$TESI_DIR/stonefish/data"
+  [ -f "$SF_DATA/nereo.scn" ] || { echo "nereo.scn not found in $SF_DATA (TESI_DIR)"; exit 2; }
+fi
 
 # each process in its own session, stopped as a whole group at the end: `ros2 run`
 # does not pass SIGTERM on to the node it starts, which would be left running
@@ -44,8 +56,20 @@ start() {   # start <log> <command...>
   setsid "$@" > "$LOG/$log" 2>&1 &
   PIDS+=($!)
 }
-if [ "$SIM" = dinamica ]; then
-  start sim_dinamica.log ros2 run gui_pkg sim_dinamica
+if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
+  if [ "$SIM" = stonefish ]; then
+    if [ "${GUI:-0}" = 1 ]; then
+      start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
+        simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/nereo.scn" \
+        rendering_quality:=low window_res_x:=1280 window_res_y:=720
+    else
+      start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator_nogpu.launch.py \
+        simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/nereo.scn"
+    fi
+    start sim_dinamica.log python3 "$TESI_DIR/stonefish/sim_stonefish.py"
+  else
+    start sim_dinamica.log ros2 run gui_pkg sim_dinamica
+  fi
   # test gains for sim_dinamica (not tuned on the vehicle): incremental PID at the
   # 10 Hz of the bridge, anti-windup, correction capped at 0.8
   CTRL_ARGS=(-p control_mode:=2 -p authority_cap:=0.8
