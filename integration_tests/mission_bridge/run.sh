@@ -12,7 +12,8 @@
 #   (default), batteria, barometro or override (missione.py).
 # SIM=stonefish: Stonefish with Tesi-Magistrale/stonefish/data/nereo.scn and
 #   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
-#   GUI=1 opens the Stonefish window (default: no window). TESI_DIR: the
+#   GUI=1 opens the Stonefish window (default: no window); YAW_KP, YAW_KI, YAW_KD
+#   override the yaw gains of the controller. TESI_DIR: the
 #   Tesi-Magistrale clone (default ../Tesi-Magistrale next to this repo, or ~/Tesi-Magistrale).
 # BAG=1 (default with SIM=dinamica or stonefish) records all topics with ros2 bag in
 #   $LOG/bag_<scenario>.
@@ -75,6 +76,14 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
   CTRL_ARGS=(-p control_mode:=2 -p authority_cap:=0.8
              -p "kp:=[1.5, 0.5, 0.5, 1.5]" -p "ki:=[0.03, 0.0, 0.0, 0.05]"
              -p "kd:=[0.0, 0.0, 0.0, 0.0]")
+  if [ "$SIM" = stonefish ]; then
+    # Stonefish has real yaw inertia and 4 vectored T200 on yaw: with the sim_dinamica
+    # gains yaw oscillates. First guess (not tuned): lower yaw P, yaw D, lower yaw I.
+    # Order of the arrays: depth, roll, pitch, yaw.
+    CTRL_ARGS=(-p control_mode:=2 -p authority_cap:=0.8
+               -p "kp:=[1.5, 0.5, 0.5, ${YAW_KP:-0.6}]" -p "ki:=[0.03, 0.0, 0.0, ${YAW_KI:-0.01}]"
+               -p "kd:=[0.0, 0.0, 0.0, ${YAW_KD:-3.0}]")
+  fi
 else
   start fake_vehicle.log python3 "$HERE/fake_vehicle.py"
   CTRL_ARGS=(-p control_mode:=1)
