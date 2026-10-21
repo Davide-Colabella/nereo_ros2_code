@@ -68,6 +68,7 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/nereo.scn"
     fi
     start sim_dinamica.log python3 "$TESI_DIR/stonefish/sim_stonefish.py"
+    export YAW_TURN_S=30 YAW_TURN_TOL=0.02
   else
     start sim_dinamica.log ros2 run gui_pkg sim_dinamica
   fi

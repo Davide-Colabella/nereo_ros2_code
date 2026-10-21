@@ -22,6 +22,7 @@ Faults are injected through parameters: banco.batteria_pct of the bridge (bench
 battery), barometro_attivo and yaw_iniziale of sim_dinamica.
 """
 import math
+import os
 import sys
 import time
 
@@ -93,6 +94,12 @@ def wrap(a):
 
 def name(sub):
     return SUB[sub] if sub < len(SUB) else str(sub)
+
+
+# sim_dinamica turns the vehicle at once; a physical simulator (SIM=stonefish) turns it
+# with the thrusters, as a pilot would: run.sh widens time and tolerance there
+TURN_S = float(os.environ.get('YAW_TURN_S', '2.0'))
+TURN_TOL = float(os.environ.get('YAW_TURN_TOL', '1e-3'))
 
 
 def param(name_, value):
@@ -243,7 +250,7 @@ class Scenario(Node):
                                  60.0), 'chart in Ready')
         if yaw is not None:
             ok = self.set_params(self.sim_params, yaw_iniziale=yaw) and self.wait_for(
-                lambda: self.truth and abs(wrap(self.truth[2] - yaw)) < 1e-3, 2.0)
+                lambda: self.truth and abs(wrap(self.truth[2] - yaw)) < TURN_TOL, TURN_S)
             self.check(ok, 'vehicle turned to %.2f rad after the tare (yaw %.3f rad)' % (
                 yaw, self.truth[2] if self.truth else float('nan')))
         self.publish_plan()
