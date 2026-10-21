@@ -13,7 +13,8 @@
 # SIM=stonefish: Stonefish with Tesi-Magistrale/stonefish/data/nereo.scn and
 #   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
 #   GUI=1 opens the Stonefish window (default: no window); YAW_KP, YAW_KI, YAW_KD
-#   override the yaw gains of the controller. TESI_DIR: the
+#   override the yaw gains of the controller. PLOT=1 opens PlotJuggler with the
+#   Nereo layout (Tesi-Magistrale/stonefish/plotjuggler_nereo.xml). TESI_DIR: the
 #   Tesi-Magistrale clone (default ../Tesi-Magistrale next to this repo, or ~/Tesi-Magistrale).
 # BAG=1 (default with SIM=dinamica or stonefish) records all topics with ros2 bag in
 #   $LOG/bag_<scenario>.
@@ -79,11 +80,14 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
              -p "kd:=[0.0, 0.0, 0.0, 0.0]")
   if [ "$SIM" = stonefish ]; then
     # Stonefish has real yaw inertia and 4 vectored T200 on yaw: with the sim_dinamica
-    # gains yaw oscillates. First guess (not tuned): lower yaw P, yaw D, lower yaw I.
+    # gains yaw oscillates. First guess (not tuned): lower yaw P, a little yaw D, lower yaw I.
+    # The PID is incremental with D on the error: a large D gives a derivative kick at
+    # every heading step that the anti-windup cuts only on one side (kd 3 turned the
+    # vehicle the wrong way in TrAlign).
     # Order of the arrays: depth, roll, pitch, yaw.
     CTRL_ARGS=(-p control_mode:=2 -p authority_cap:=0.8
                -p "kp:=[1.5, 0.5, 0.5, ${YAW_KP:-0.6}]" -p "ki:=[0.03, 0.0, 0.0, ${YAW_KI:-0.01}]"
-               -p "kd:=[0.0, 0.0, 0.0, ${YAW_KD:-3.0}]")
+               -p "kd:=[0.0, 0.0, 0.0, ${YAW_KD:-0.5}]")
   fi
 else
   start fake_vehicle.log python3 "$HERE/fake_vehicle.py"
@@ -93,6 +97,13 @@ start safety_node.log ros2 run web_pkg safety_node
 start controller.log ros2 run nereo_controller_node nereo_controller_node --ros-args "${CTRL_ARGS[@]}"
 # chart + bridge, bench mode (FpgaBus from /rov_armed, bench battery)
 start bridge.log ros2 launch nereo_mission_bridge nereo_mission_bridge.launch.py modalita_banco:=true
+# PLOT=1: PlotJuggler with the Nereo layout, left open at the end to look at the run
+if [ "${PLOT:-0}" = 1 ]; then
+  : "${TESI_DIR:=$REPO/../Tesi-Magistrale}"
+  [ -d "$TESI_DIR/stonefish" ] || TESI_DIR="$HOME/Tesi-Magistrale"
+  setsid ros2 run plotjuggler plotjuggler -l "$TESI_DIR/stonefish/plotjuggler_nereo.xml" \
+    > "$LOG/plotjuggler.log" 2>&1 &
+fi
 BAG_PID=
 if [ "$BAG" = 1 ]; then
   rm -rf "$LOG/bag_$SCENARIO"
