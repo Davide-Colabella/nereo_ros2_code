@@ -18,8 +18,15 @@ list of states the chart went through and "RESULT PASS" or "RESULT FAIL".
             OPERATOR; the pilot brings the vehicle up with the joystick and
             disarms at the surface: Surfaced, Ready
 
+  guasto_*  SIM=stonefish only: the completa plan with one fault injected during a
+            phase (FAULTS below: thrusters lost or weak, a sensor lost, commands
+            lost). Checks that the vehicle ends at the surface, disarmed; prints the
+            chart's reaction (DETECTION) and what the vehicle did after the fault
+            (EFFECT), against what the spec makes us expect (EXPECTED)
+
 Faults are injected through parameters: banco.batteria_pct of the bridge (bench
-battery), barometro_attivo and yaw_iniziale of sim_dinamica.
+battery), barometro_attivo and yaw_iniziale of sim_dinamica; with Stonefish also
+motori_guasti, efficienza_guasto, imu_attiva, sonar_attivo, comandi_attivi.
 """
 import math
 import os
@@ -106,6 +113,8 @@ def param(name_, value):
     p = Parameter(name=name_)
     if isinstance(value, bool):
         p.value = ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=value)
+    elif isinstance(value, str):
+        p.value = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=value)
     else:
         p.value = ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=float(value))
     return p
@@ -411,8 +420,109 @@ def override(s):
     s.check(s.reasons() == ['OPERATOR'], 'only reason OPERATOR (%s)' % s.reasons())
 
 
+# ── faults (SIM=stonefish) ────────────────────────────────────────────────
+
+# name: (phase, seconds into it, sim parameters, what the spec makes us expect)
+# Thrusters in firmware order: 1..4 horizontal (FR, FL, RR, RL), 5..8 vertical
+# (FR, FL, RR, RL). The chart has no per-thruster signal: it can only see the
+# effects (Descend timeout, NO_ASCENT, ATTITUDE, AltAcquire timeout) or the
+# firmware state (SAFE_STOP, LATCHED_FAULT), which the bridge does not get yet.
+FAULTS = {
+    'nessun_guasto': ('Hold', 3.0, {}, 'none: reference for the EFFECT lines of the others'),
+    'guasto_discesa': ('DescendToDepth', 1.0, {'motori_guasti': '5', 'efficienza_guasto': 0.0},
+                       'none or Descend TIMEOUT (60 s) if the depth is not reached'),
+    'guasto_hold': ('Hold', 3.0, {'motori_guasti': '5', 'efficienza_guasto': 0.0},
+                    'none (no guard on the depth error in a task)'),
+    'guasto_assetto': ('Hold', 3.0, {'motori_guasti': '5,7', 'efficienza_guasto': 0.0},
+                       'Abort ATTITUDE if roll or pitch stays over 30 deg for 3 s'),
+    'guasto_transetto': ('TrRun', 3.0, {'motori_guasti': '1', 'efficienza_guasto': 0.0},
+                         'none (no guard on heading or track in a task)'),
+    'guasto_debole': ('TrRun', 3.0, {'motori_guasti': '1,2,3,4', 'efficienza_guasto': 0.5},
+                      'none (half thrust on all horizontals: slower transect)'),
+    'guasto_risalita': ('AscToSafety', 1.0,
+                        {'motori_guasti': '5,6,7,8', 'efficienza_guasto': 0.0},
+                        'NO_ASCENT if under 0.5 m of ascent in 20 s; buoyancy alone may do'),
+    'comandi_persi': ('TrRun', 3.0, {'comandi_attivi': False},
+                      'none from the chart (the bridge does not see the commands lost)'),
+    'imu_persa': ('Hold', 3.0, {'imu_attiva': False},
+                  'FaultSafe CRITICAL (IMU stale), disarm, float up'),
+    'sonar_perso': ('AltTrack', 3.0, {'sonar_attivo': False},
+                    'AltFallback after P_ALT_LOSS (2 s), TaskFailed after 20 s, policy'),
+}
+
+
+def guasto(s, which):
+    phase, after, params, expected = FAULTS[which]
+    s.log('EXPECTED %s' % expected)
+    if not s.start_mission():
+        return
+    if not s.check(s.wait_for(lambda: s.in_sub(phase), 150.0), '%s reached' % phase):
+        return
+    s.spin_for(after)
+    t_f = s.now()
+    n_path = len(s.path)
+    ok = s.set_params(s.sim_params, **params)
+    s.check(ok, 'fault injected in %s: %s' % (phase, params))
+    # after the fault, in every substate of Mission, after its first SETTLE_S (the
+    # transient of the step in the setpoints): attitude, and the depth and heading
+    # errors against the controller setpoints; track in the faulty phase; until the
+    # vehicle is up and disarmed
+    SETTLE_S = 3.0
+    stats = {}     # substate -> [samples, max |roll|,|pitch|, max depth err, max heading err]
+    xy = []
+    up = False
+    sub_in, t_in = None, 0.0
+    end = time.monotonic() + 300.0
+    while time.monotonic() < end:
+        s.spin_for(0.1)
+        x = s.truth
+        if not x:
+            continue
+        sub = name(s.status.substate)
+        if sub != sub_in:
+            sub_in, t_in = sub, s.now()
+        if (s.status.state == MISSION and s.setpoints and len(x) >= 12 and
+                s.now() - t_in > SETTLE_S):
+            st = stats.setdefault(sub, [0, 0.0, 0.0, 0.0])
+            st[0] += 1
+            st[1] = max(st[1], abs(x[10]), abs(x[11]))
+            st[2] = max(st[2], abs(x[1] - s.setpoints[0]))
+            st[3] = max(st[3], abs(wrap(x[2] - s.setpoints[3])))
+        if s.in_sub(phase):
+            xy.append((x[3], x[4]))
+        if x[9] == 0.0 and x[1] < 0.3 and s.status.state in (READY, FAULTSAFE):
+            up = True
+            break
+    reacted = [(t, st, sub, r) for t, st, sub, r in s.path[n_path:]
+               if st in (ABORT, FAULTSAFE) or name(sub) in ('TaskFailed', 'AltFallback')]
+    if reacted:
+        t, st, sub, r = reacted[0]
+        s.log('DETECTION %s/%s reason %s, %.1f s after the fault' % (
+            TOP[st], name(sub), REASON[r], t - t_f))
+    else:
+        s.log('DETECTION none: the chart did not leave the mission plan')
+    track = ''
+    if len(xy) > 1:
+        (x0, y0), (x1, y1) = xy[0], xy[-1]
+        track = ': %.1f m on course %.2f rad' % (
+            math.hypot(x1 - x0, y1 - y0), math.atan2(y1 - y0, x1 - x0))
+    s.log('EFFECT track in %s%s; up and disarmed %.1f s after the fault' % (
+        phase, track or ': none', s.now() - t_f))
+    # depth error not meaningful where the depth setpoint is not what the vehicle follows
+    no_depth = ('AltAcquire', 'AltTrack', 'AltFallback', 'AscToSafety', 'AscSlowFinal')
+    for sub, (n, att, dep, yaw_e) in stats.items():
+        s.log('EFFECT %-13s %3d samples: max |roll|,|pitch| %4.1f deg, depth error %s, '
+              'heading error %.3f rad' % (sub, n, math.degrees(att),
+                                          '  -   ' if sub in no_depth else '%.2f m' % dep, yaw_e))
+    s.check(up, 'vehicle at the surface and disarmed (chart %s, depth %.2f m)' % (
+        TOP[s.status.state], s.truth[1] if s.truth else float('nan')))
+    s.log('path after the fault: %s' % ' > '.join(
+        name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path[n_path:])))
+
+
 SCENARIOS = {'completa': completa, 'batteria': batteria, 'barometro': barometro,
              'override': override}
+SCENARIOS.update({f: (lambda s, f=f: guasto(s, f)) for f in FAULTS})
 
 
 def main():

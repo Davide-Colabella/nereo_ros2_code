@@ -12,7 +12,8 @@
 #   (default), batteria, barometro or override (missione.py).
 # SIM=stonefish: Stonefish with Tesi-Magistrale/stonefish/data/nereo.scn and
 #   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
-#   GUI=1 opens the Stonefish window (default: no window); YAW_KP, YAW_KI, YAW_KD
+#   GUI=1 opens the Stonefish window (default: no window); fault scenarios guasto_*,
+#   comandi_persi, imu_persa, sonar_perso (missione.py, FAULTS); YAW_KP, YAW_KI, YAW_KD
 #   override the yaw gains of the controller. PLOT=1 opens PlotJuggler with the
 #   Nereo layout (Tesi-Magistrale/stonefish/plotjuggler_nereo.xml). TESI_DIR: the
 #   Tesi-Magistrale clone (default ../Tesi-Magistrale next to this repo, or ~/Tesi-Magistrale).
@@ -34,6 +35,7 @@ mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
   fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
   stonefish/base|stonefish/completa|stonefish/batteria|stonefish/barometro|stonefish/override) ;;
+  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
@@ -114,7 +116,7 @@ fi
 if [ "$SCENARIO" = base ]; then
   timeout 120 python3 "$HERE/pilot.py" | tee "$LOG/pilot_$SCENARIO.log"
 else
-  timeout 400 python3 "$HERE/missione.py" "$SCENARIO" | tee "$LOG/pilot_$SCENARIO.log"
+  timeout 600 python3 "$HERE/missione.py" "$SCENARIO" | tee "$LOG/pilot_$SCENARIO.log"
 fi
 RESULT=${PIPESTATUS[0]}
 
