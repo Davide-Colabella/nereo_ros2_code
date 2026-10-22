@@ -287,10 +287,13 @@ def completa(s):
         s.spin_for(0.1)
         if s.truth and s.in_sub(*DESCENT):
             descent.append(s.truth[2])
-    dev = max((abs(wrap(y - YAW_START)) for y in descent), default=float('inf'))
+    # reference: the true heading entering LeaveSurface, not YAW_START (the turn in Ready
+    # stops within YAW_TURN_TOL of it, which is not the chart's doing)
+    yaw0 = descent[0] if descent else YAW_START
+    dev = max((abs(wrap(y - yaw0)) for y in descent), default=float('inf'))
     s.check(len(descent) > 10 and dev < 0.05,
-            'descent: yaw within 0.05 rad of %.2f (max deviation %.3f rad, %d samples)' % (
-                YAW_START, dev, len(descent)))
+            'descent: yaw within 0.05 rad of %.2f, the heading at LeaveSurface '
+            '(max deviation %.3f rad, %d samples)' % (yaw0, dev, len(descent)))
     depth = s.track('Hold', 60.0, lambda x: x[1])
     s.check(depth and max(abs(d - 2.0) for d in depth[2:]) < 0.2,
             'HOLD: depth within 0.2 m of 2.0 (%.2f .. %.2f m)' % (
