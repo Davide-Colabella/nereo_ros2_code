@@ -12,7 +12,8 @@
 #   (default), batteria, barometro or override (missione.py).
 # SIM=stonefish: Stonefish with Tesi-Magistrale/stonefish/data/nereo.scn and
 #   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
-#   GUI=1 opens the Stonefish window (default: no window); fault scenarios guasto_*,
+#   SCN=<file> another scenario of stonefish/data (default nereo.scn, e.g. a current from
+#   genera_scenario.py --corrente); GUI=1 opens the Stonefish window (default: no window); fault scenarios guasto_*,
 #   comandi_persi, imu_persa, sonar_perso (missione.py, FAULTS); YAW_KP, YAW_KI, YAW_KD
 #   override the yaw gains of the controller. PLOT=1 opens PlotJuggler with the
 #   Nereo layout (Tesi-Magistrale/stonefish/plotjuggler_nereo.xml). TESI_DIR: the
@@ -35,7 +36,7 @@ mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
   fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
   stonefish/base|stonefish/completa|stonefish/batteria|stonefish/barometro|stonefish/override) ;;
-  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
+  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
@@ -49,7 +50,8 @@ if [ "$SIM" = stonefish ]; then
   : "${TESI_DIR:=$REPO/../Tesi-Magistrale}"
   [ -d "$TESI_DIR/stonefish" ] || TESI_DIR="$HOME/Tesi-Magistrale"
   SF_DATA="$TESI_DIR/stonefish/data"
-  [ -f "$SF_DATA/nereo.scn" ] || { echo "nereo.scn not found in $SF_DATA (TESI_DIR)"; exit 2; }
+  : "${SCN:=nereo.scn}"   # another scenario of the same folder, e.g. nereo_corrente_0_0.1.scn
+  [ -f "$SF_DATA/$SCN" ] || { echo "$SCN not found in $SF_DATA (TESI_DIR)"; exit 2; }
 fi
 
 # each process in its own session, stopped as a whole group at the end: `ros2 run`
@@ -64,13 +66,15 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
   if [ "$SIM" = stonefish ]; then
     if [ "${GUI:-0}" = 1 ]; then
       start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
-        simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/nereo.scn" \
+        simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN" \
         rendering_quality:=low window_res_x:=1280 window_res_y:=720
     else
       start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator_nogpu.launch.py \
-        simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/nereo.scn"
+        simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN"
     fi
-    start sim_dinamica.log python3 "$TESI_DIR/stonefish/sim_stonefish.py"
+    # RITARDO=<s>: depth and IMU late by that much from the start (sim_stonefish ritardo_sensori_s)
+    start sim_dinamica.log python3 "$TESI_DIR/stonefish/sim_stonefish.py" \
+      ${RITARDO:+--ros-args -p ritardo_sensori_s:=$RITARDO}
     export YAW_TURN_S=30 YAW_TURN_TOL=0.02
   else
     start sim_dinamica.log ros2 run gui_pkg sim_dinamica

@@ -452,6 +452,17 @@ FAULTS = {
     'comandi_persi': ('TrRun', 3.0, {'comandi_attivi': False},
                       'Abort TRACKING once the depth error stays over P_TRACK_DEPTH (0.5 m) for '
                       'P_TRACK_TIME (5 s), with the chart of 22/10/2026; none before it'),
+    'ritardo_200ms': ('LeaveSurface', 0.0, {'ritardo_sensori_s': 0.2},
+                      'none: depth and IMU 0.2 s late from the descent on (compare EFFECT)'),
+    'ritardo_500ms': ('LeaveSurface', 0.0, {'ritardo_sensori_s': 0.5},
+                      'FaultSafe CRITICAL: switching the delay on leaves the IMU silent for '
+                      '0.5 s plus a period, over the bridge freshness of 0.6 s (the steady '
+                      'delay from the start is run.sh RITARDO=)'),
+    # the current of the scenario file (run.sh SCN=nereo_corrente_<vx>_<vy>.scn) switched on
+    'corrente_hold': ('Hold', 3.0, {'correnti_attive': True},
+                      'none: no position, the chart cannot see the drift (EFFECT track)'),
+    'corrente_transetto': ('TrRun', 0.5, {'correnti_attive': True},
+                           'none: the heading is held, the course drifts (EFFECT track)'),
     'imu_persa': ('Hold', 3.0, {'imu_attiva': False},
                   'FaultSafe CRITICAL (IMU stale), disarm, float up'),
     'sonar_perso': ('AltTrack', 3.0, {'sonar_attivo': False},
