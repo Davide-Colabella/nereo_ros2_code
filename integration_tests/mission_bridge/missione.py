@@ -60,7 +60,7 @@ SUB = ['WaitLink', 'CheckSensors', 'CheckBattery', 'Calibrate', 'Idle', 'PlanLoa
 REASON = ['NONE', 'OPERATOR', 'HEALTH', 'BATTERY', 'DEPTH_LIMIT', 'ALTITUDE_LIMIT', 'TIMEOUT',
           'GEOFENCE', 'ATTITUDE', 'TASK_FAILED', 'NO_ASCENT', 'FPGA_OVERRIDE', 'LINK_LOST',
           'INCOHERENT', 'CRITICAL', 'SELFTEST', 'ARM_TIMEOUT', 'ARM_REFUSED', 'THRUSTER_CHECK',
-          'DISARM_TIMEOUT', 'SHUTDOWN']
+          'DISARM_TIMEOUT', 'SHUTDOWN', 'TRACKING']
 READY, MISSION, ABORT, SURFACED, FAULTSAFE = 1, 3, 4, 5, 6
 
 # plan: (type, depth, heading, speed, duration, altitude); TaskType HOLD 1,
@@ -443,7 +443,8 @@ FAULTS = {
                         {'motori_guasti': '5,6,7,8', 'efficienza_guasto': 0.0},
                         'NO_ASCENT if under 0.5 m of ascent in 20 s; buoyancy alone may do'),
     'comandi_persi': ('TrRun', 3.0, {'comandi_attivi': False},
-                      'none from the chart (the bridge does not see the commands lost)'),
+                      'Abort TRACKING once the depth error stays over P_TRACK_DEPTH (0.5 m) for '
+                      'P_TRACK_TIME (5 s), with the chart of 22/10/2026; none before it'),
     'imu_persa': ('Hold', 3.0, {'imu_attiva': False},
                   'FaultSafe CRITICAL (IMU stale), disarm, float up'),
     'sonar_perso': ('AltTrack', 3.0, {'sonar_attivo': False},
