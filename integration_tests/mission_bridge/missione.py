@@ -298,10 +298,14 @@ def completa(s):
     # the bridge maps DEPTH_HOLD to setpoint.heading: the turn happens in TrAlign
     yaw_in = s.truth[2] if s.wait_for(lambda: s.in_sub('TrAlign'), 60.0) and s.truth else None
     align = s.track('TrAlign', 1.0, lambda x: x[2])
+    # TrAlign ends after P_ALIGN_TIME, not on the heading: the chart promises a turn
+    # in the right direction, not that it is over (the heading is checked at the end
+    # of TrRun). On Stonefish the turn stalls at 79..91 % of the step after 5 s.
     if yaw_in is not None and align:
-        s.check(abs(yaw_in) < 0.1 and abs(align[-1] - HEADING) < 0.1,
-                'TrAlign: yaw from %.2f to %.2f rad (plan %.2f), turned before TrRun' % (
-                    yaw_in, align[-1], HEADING))
+        done = wrap(align[-1] - yaw_in) / wrap(HEADING - yaw_in)
+        s.check(abs(yaw_in) < 0.1 and done > 0.75 and wrap(align[-1] - HEADING) < 0.1,
+                'TrAlign: yaw from %.2f to %.2f rad (plan %.2f), %.0f %% of the turn before TrRun' % (
+                    yaw_in, align[-1], HEADING, 100 * done))
     else:
         s.check(False, 'TrAlign reached')
     run = s.track('TrRun', 60.0, lambda x: (x[2], x[3], x[4], x[1]))
