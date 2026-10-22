@@ -435,6 +435,13 @@ FAULTS = {
                     'none (no guard on the depth error in a task)'),
     'guasto_assetto': ('Hold', 3.0, {'motori_guasti': '5,7', 'efficienza_guasto': 0.0},
                        'Abort ATTITUDE if roll or pitch stays over 30 deg for 3 s'),
+    'guasto_verticali_hold': ('Hold', 3.0, {'motori_guasti': '5,6,7,8', 'efficienza_guasto': 0.0},
+                              'Abort TRACKING (the vehicle floats up off the task depth), '
+                              'with the chart of 22/10/2026; none before it'),
+    'guasto_verticali_deboli': ('Hold', 3.0,
+                                {'motori_guasti': '5,6,7,8', 'efficienza_guasto': 0.3},
+                                'none if 30 % of vertical thrust still holds the depth, '
+                                'else Abort TRACKING'),
     'guasto_transetto': ('TrRun', 3.0, {'motori_guasti': '1', 'efficienza_guasto': 0.0},
                          'none (no guard on heading or track in a task)'),
     'guasto_debole': ('TrRun', 3.0, {'motori_guasti': '1,2,3,4', 'efficienza_guasto': 0.5},
