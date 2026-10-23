@@ -36,7 +36,7 @@ mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
   fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
   stonefish/base|stonefish/completa|stonefish/batteria|stonefish/barometro|stonefish/override) ;;
-  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/ostacolo|stonefish/falsi_allarmi|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
+  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/ostacolo|stonefish/falsi_allarmi|stonefish/goto|stonefish/goto_dvl_perso|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
@@ -117,6 +117,9 @@ OST_ARGS=()
 [ "${OSTACOLI:-0}" = 1 ] && OST_ARGS=(topic_ostacoli:=/ostacoli/scan)
 # PONTE_YAML=<file>: another parameter file for the bridge (e.g. other avoidance commands)
 [ -n "${PONTE_YAML:-}" ] && OST_ARGS+=(parametri_ponte:="$PONTE_YAML")
+# DVL=1: the bridge estimates the position from the DVL velocities (/dvl/velocita, from
+# sim_stonefish); default off, as on the vehicle (no DVL yet)
+[ "${DVL:-0}" = 1 ] && OST_ARGS+=(topic_dvl:=/dvl/velocita)
 start bridge.log ros2 launch nereo_mission_bridge nereo_mission_bridge.launch.py modalita_banco:=true "${OST_ARGS[@]}"
 # PLOT=1: PlotJuggler with the Nereo layout, left open at the end to look at the run
 if [ "${PLOT:-0}" = 1 ]; then

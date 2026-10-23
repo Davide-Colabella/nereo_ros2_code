@@ -35,7 +35,7 @@ import time
 
 import rclpy
 from nereo_interfaces.msg import CommandVelocity
-from nereo_mission_msgs.msg import Cmd, MissionStatusBus, ObstacleBus, PlanBus
+from nereo_mission_msgs.msg import Cmd, MissionStatusBus, NavBus, ObstacleBus, PlanBus
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
@@ -132,6 +132,8 @@ class Scenario(Node):
         self.depth_meas = None
         self.setpoints = None
         self.avoid = False      # plan.avoid_enabled
+        self.plan = None        # another plan than PLAN
+        self.nav = None         # missione/nav, the bridge estimate
         self.obstacle = None    # missione/obstacle, if the bridge publishes it
         self.create_subscription(UInt8, '/modalita_guida',
                                  lambda m: setattr(self, 'mode', m.data), LATCHED)
@@ -142,6 +144,7 @@ class Scenario(Node):
                                  lambda m: setattr(self, 'depth_meas', m.data), BEST_EFFORT)
         self.create_subscription(Float64MultiArray, '/controller/setpoints',
                                  lambda m: setattr(self, 'setpoints', list(m.data)), 10)
+        self.create_subscription(NavBus, 'missione/nav', lambda m: setattr(self, 'nav', m), 10)
         self.create_subscription(ObstacleBus, 'missione/obstacle',
                                  lambda m: setattr(self, 'obstacle', m), 10)
         self.p_plan = self.create_publisher(PlanBus, 'missione/plan', LATCHED)
@@ -235,15 +238,19 @@ class Scenario(Node):
         return False
 
     def publish_plan(self):
-        plan = PlanBus(valid=True, len=len(PLAN), max_depth=4.0, max_time=900.0,
+        piano = self.plan or PLAN
+        plan = PlanBus(valid=True, len=len(piano), max_depth=4.0, max_time=900.0,
                        avoid_enabled=self.avoid)
-        for i, (typ, depth, heading, speed, duration, altitude) in enumerate(PLAN):
+        for i, task in enumerate(piano):
+            typ, depth, heading, speed, duration, altitude = task[:6]
             plan.type[i] = typ
             plan.depth[i] = depth
             plan.heading[i] = heading
             plan.speed[i] = speed
             plan.duration[i] = duration
             plan.altitude[i] = altitude
+            if len(task) > 6:   # GOTO: (..., x, y) in the bridge frame (origin at the tare)
+                plan.x[i], plan.y[i] = task[6], task[7]
         self.p_plan.publish(plan)
 
     def override_button(self):
@@ -624,11 +631,62 @@ def falsi_allarmi(s):
     s.check(s.truth[9] == 0.0 and s.truth[1] < 0.3, 'vehicle at the surface and disarmed')
 
 
+# ── GOTO with the DVL (SIM=stonefish, DVL=1) ──────────────────────────────
+
+# HOLD 10 s at 2 m, GOTO (4, 3) m at 0.25 m/s within 60 s, HOLD 10 s; TaskType GOTO 4
+GOTO_XY = (4.0, 3.0)
+PLAN_GOTO = [(1, 2.0, 0.0, 0.0, 10.0, 0.0),
+             (4, 2.0, 0.0, 0.25, 60.0, 0.0, GOTO_XY[0], GOTO_XY[1]),
+             (1, 2.0, 0.0, 0.0, 10.0, 0.0)]
+
+
+def goto(s, perdi_dvl=False):
+    """The bridge estimates the position from the DVL; the chart goes to GOTO_XY (frame of the
+    tare: origin where the vehicle was, axes of its heading). Checks the arrival, the true
+    position there and the error of the estimate. perdi_dvl: the DVL stops during GtApproach,
+    the chart must go to NavDegraded."""
+    s.plan = PLAN_GOTO
+    if not s.start_mission():
+        return
+    origin = (s.truth[3], s.truth[4]) if s.truth else (0.0, 0.0)
+    s.check(s.wait_for(lambda: s.in_sub('GtApproach'), 120.0), 'GtApproach reached')
+    t0 = s.now()
+    if os.environ.get('CORRENTE') == '1':   # the current of the scenario (run.sh SCN=)
+        s.check(s.set_params(s.sim_params, correnti_attive=True), 'current switched on')
+    if perdi_dvl:
+        s.spin_for(5.0)
+        s.check(s.set_params(s.sim_params, dvl_attivo=False), 'DVL lost in GtApproach')
+        s.check(s.wait_for(lambda: s.in_sub('NavDegraded'), 5.0),
+                'NavDegraded after P_NAV_LOSS (%s)' % name(s.status.substate))
+        s.check(s.wait_for(lambda: s.in_sub('TaskFailed') or s.status.state != MISSION, 60.0),
+                'task failed after P_NAVDEG_TIMEOUT')
+    else:
+        arrived = s.wait_for(lambda: not s.in_sub('GtApproach', 'GtAlign'), 90.0)
+        x = s.truth
+        n = s.nav
+        tx, ty = x[3] - origin[0], x[4] - origin[1]
+        s.check(arrived and s.in_sub('SelectTask', 'PrepareTask', 'Hold'),
+                'GOTO arrived in %.1f s (chart %s)' % (s.now() - t0, name(s.status.substate)))
+        s.log('at the arrival: estimate (%.2f, %.2f) m, true (%.2f, %.2f) m from the start, '
+              'target (%.1f, %.1f)' % (n.x, n.y, tx, ty, GOTO_XY[0], GOTO_XY[1]))
+        s.check(math.hypot(tx - GOTO_XY[0], ty - GOTO_XY[1]) < 1.0,
+                'true position within 1 m of the target (%.2f m)' % math.hypot(
+                    tx - GOTO_XY[0], ty - GOTO_XY[1]))
+        s.log('error of the DVL estimate: %.2f m' % math.hypot(n.x - tx, n.y - ty))
+    s.check(s.wait_for(lambda: s.truth[9] == 0.0 and s.truth[1] < 0.3, 200.0),
+            'vehicle at the surface and disarmed')
+    s.check(s.reasons() == [], 'no abort reason (%s)' % s.reasons())
+    s.log('path: %s' % ' > '.join(
+        name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path)))
+
+
 SCENARIOS = {'completa': completa, 'batteria': batteria, 'barometro': barometro,
              'override': override}
 SCENARIOS.update({f: (lambda s, f=f: guasto(s, f)) for f in FAULTS})
 SCENARIOS['ostacolo'] = ostacolo
 SCENARIOS['falsi_allarmi'] = falsi_allarmi
+SCENARIOS['goto'] = goto
+SCENARIOS['goto_dvl_perso'] = lambda s: goto(s, perdi_dvl=True)
 
 
 def main():
