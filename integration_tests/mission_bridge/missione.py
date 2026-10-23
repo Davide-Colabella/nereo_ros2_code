@@ -712,12 +712,36 @@ def geofence(s):
             'vehicle at the surface and disarmed')
 
 
+# ── Demonstration (SIM=stonefish GUI=1, only to be watched) ───────────────
+
+# HOLD 8 s, TRANSECT towards the pole (avoidance), GOTO back to the side, ALTITUDE_HOLD 1.5 m
+PLAN_DEMO = [(1, 2.0, 0.0, 0.0, 8.0, 0.0),
+             (2, 2.0, HEADING, 0.3, 30.0, 0.0),
+             (4, 2.0, 0.0, 0.25, 90.0, 0.0, 6.0, 0.0),
+             (3, 0.0, 0.0, 0.0, 15.0, 1.5)]
+
+
+def demo(s):
+    """A mission that shows a bit of everything (needs DVL=1, OSTACOLI=1, PING360=1 and the
+    scenario with the pole): dive, hold, transect with avoidance, GOTO, altitude hold, ascent
+    and disarm. Only the end of the mission is checked; the path is logged."""
+    s.plan = PLAN_DEMO
+    s.avoid = True
+    if not s.start_mission():
+        return
+    s.check(s.wait_for(lambda: s.truth[9] == 0.0 and s.truth[1] < 0.3
+                       and s.status.state == READY, 400.0), 'vehicle at the surface and disarmed')
+    s.log('path: %s' % ' > '.join(
+        name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path)))
+
+
 SCENARIOS = {'completa': completa, 'batteria': batteria, 'barometro': barometro,
              'override': override}
 SCENARIOS.update({f: (lambda s, f=f: guasto(s, f)) for f in FAULTS})
 SCENARIOS['ostacolo'] = ostacolo
 SCENARIOS['falsi_allarmi'] = falsi_allarmi
 SCENARIOS['goto'] = goto
+SCENARIOS['demo'] = demo
 SCENARIOS['geofence'] = geofence
 SCENARIOS['goto_dvl_perso'] = lambda s: goto(s, perdi_dvl=True)
 

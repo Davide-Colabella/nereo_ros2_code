@@ -36,7 +36,7 @@ mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
   fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
   stonefish/base|stonefish/completa|stonefish/batteria|stonefish/barometro|stonefish/override) ;;
-  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/ostacolo|stonefish/falsi_allarmi|stonefish/goto|stonefish/geofence|stonefish/goto_dvl_perso|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
+  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/ostacolo|stonefish/falsi_allarmi|stonefish/goto|stonefish/geofence|stonefish/demo|stonefish/goto_dvl_perso|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
