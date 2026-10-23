@@ -74,6 +74,12 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
       # integrated GPU); default the GPU of the desktop
       GPU_ENV=()
       [ "${GPU:-}" = nvidia ] && GPU_ENV=(__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia)
+      # the Ping360 is rendered on the GPU: on the integrated GPU at high quality it fell to
+      # 10.7 beams/s (nominal 18..25) and missed the pole, so without GPU=nvidia it gets low
+      if [ "${PING360:-0}" = 1 ] && [ "${GPU:-}" != nvidia ] && [ "${QUALITA:-low}" != low ]; then
+        echo "PING360=1 without GPU=nvidia: QUALITA=${QUALITA} -> low (the sonar would be too slow)"
+        QUALITA=low
+      fi
       start stonefish.log env "${GPU_ENV[@]}" ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN" \
         rendering_quality:="${QUALITA:-low}" window_res_x:="${RIS_X:-1280}" window_res_y:="${RIS_Y:-720}"

@@ -728,10 +728,26 @@ def demo(s):
     and disarm. Only the end of the mission is checked; the path is logged."""
     s.plan = PLAN_DEMO
     s.avoid = True
+    px, py = (float(v) for v in os.environ.get('OSTACOLO_XY', '3.15,2.52').split(','))
     if not s.start_mission():
         return
-    s.check(s.wait_for(lambda: s.truth[9] == 0.0 and s.truth[1] < 0.3
-                       and s.status.state == READY, 400.0), 'vehicle at the surface and disarmed')
+    # the pole must be avoided, not grazed: on the integrated GPU at high quality the Ping360
+    # slowed down, the pole was missed and the vehicle passed 0.55 m from its centre (23/10)
+    dmin = float('inf')
+    avoid_seen = False
+    end = time.monotonic() + 400.0
+    done = False
+    while time.monotonic() < end and not done:
+        s.spin_for(0.1)
+        x = s.truth
+        if not x:
+            continue
+        dmin = min(dmin, math.hypot(px - x[3], py - x[4]))
+        avoid_seen = avoid_seen or s.in_sub('AvStop')
+        done = x[9] == 0.0 and x[1] < 0.3 and s.status is not None and s.status.state == READY
+    s.check(done, 'vehicle at the surface and disarmed')
+    s.check(avoid_seen, 'the pole was avoided (AvStop)')
+    s.check(dmin > 0.3 + 0.35, 'no contact: closest distance pole centre - vehicle %.2f m' % dmin)
     s.log('path: %s' % ' > '.join(
         name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path)))
 
