@@ -476,6 +476,18 @@ FAULTS = {
     'corrente_transetto': ('TrRun', 0.5, {'correnti_attive': True},
                            'without position none (the course drifts, EFFECT track); with DVL=1 '
                            'TaskFailed, note DRIFT, cross-track over 1 m for 3 s'),
+    # 24/10/2026, with DVL=1: the DVL loses the bottom for 1 s every 2.5 s (dvl_buchi of
+    # sim_stonefish); outside a GOTO there is no NavDegraded, and every gap makes pos_valid false
+    # (bridge freshness 0.5 s), so tr_err and duration(tr_err) of the DRIFT guard start again
+    'dvl_intermittente': ('TrRun', 0.5, {'dvl_buchi': '2.5,1.0'},
+                          'none: no current, the position estimate only stops in the gaps'),
+    'corrente_dvl_intermittente': ('TrRun', 0.5, {'correnti_attive': True, 'dvl_buchi': '2.5,1.0'},
+                                   'TaskFailed DRIFT as corrente_transetto; the gaps restart '
+                                   'duration(tr_err) every 2.5 s, under P_CROSS_TIME (3 s): '
+                                   'the guard may never trip'),
+    'guasto_due_orizzontali': ('TrRun', 3.0, {'motori_guasti': '1,2', 'efficienza_guasto': 0.0},
+                               'two horizontal thrusters lost: heading and cross-track degrade; '
+                               'with DVL=1 TaskFailed DRIFT if the cross-track stays over 1 m for 3 s'),
     'imu_persa': ('Hold', 3.0, {'imu_attiva': False},
                   'FaultSafe CRITICAL (IMU stale), disarm, float up'),
     'sonar_perso': ('AltTrack', 3.0, {'sonar_attivo': False},
@@ -573,6 +585,8 @@ def ostacolo(s):
     if not s.start_mission():
         return
     s.check(s.wait_for(lambda: s.in_sub('TrRun'), 150.0), 'TrRun reached')
+    if os.environ.get('CORRENTE') == '1':   # the current of the scenario (run.sh SCN=), 24/10/2026
+        s.check(s.set_params(s.sim_params, correnti_attive=True), 'current switched on in TrRun')
     first = None
     dmin = float('inf')
     avoid_seen = False
