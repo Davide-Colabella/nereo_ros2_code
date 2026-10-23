@@ -644,7 +644,8 @@ def falsi_allarmi(s):
 # ── GOTO with the DVL (SIM=stonefish, DVL=1) ──────────────────────────────
 
 # HOLD 10 s at 2 m, GOTO (4, 3) m at 0.25 m/s within 60 s, HOLD 10 s; TaskType GOTO 4
-GOTO_XY = (4.0, 3.0)
+# GOTO_XY=x,y: another target (e.g. -4,0 behind the vehicle: initial heading error pi)
+GOTO_XY = tuple(float(v) for v in os.environ.get('GOTO_XY', '4.0,3.0').split(','))
 PLAN_GOTO = [(1, 2.0, 0.0, 0.0, 10.0, 0.0),
              (4, 2.0, 0.0, 0.25, 60.0, 0.0, GOTO_XY[0], GOTO_XY[1]),
              (1, 2.0, 0.0, 0.0, 10.0, 0.0)]

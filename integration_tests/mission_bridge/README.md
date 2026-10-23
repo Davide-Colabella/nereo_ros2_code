@@ -63,6 +63,7 @@ Stonefish yaw gains (kp 0.6, ki 0.01, kd 0.5). Results and their analysis:
 | `DVL` | 0 | 1: the bridge reads `/dvl/velocita` (position, geofence, GOTO guidance) |
 | `PONTE_YAML` | — | another parameter file for the bridge (e.g. `stonefish/prove/ponte_aggiramento_0.8.yaml`) |
 | `CORRENTE` | 0 | 1: `goto` switches the current of `SCN` on in GtApproach |
+| `GOTO_XY` | `4.0,3.0` | target of the `goto` scenario (`-4,0`: behind the vehicle, heading error pi at the start) |
 | `GEOFENCE_M`, `OSTACOLO_XY` | 3.0, `3.15,2.52` | fence radius and pole position used by the checks |
 | `YAW_KP`, `YAW_KI`, `YAW_KD` | 0.6, 0.01, 0.5 | controller yaw gains |
 
