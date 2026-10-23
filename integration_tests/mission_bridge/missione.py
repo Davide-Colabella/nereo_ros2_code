@@ -501,6 +501,7 @@ def guasto(s, which):
     SETTLE_S = 3.0
     stats = {}     # substate -> [samples, max |roll|,|pitch|, max depth err, max heading err]
     xy = []
+    xy_est = []    # the bridge estimate (DVL=1)
     up = False
     sub_in, t_in = None, 0.0
     end = time.monotonic() + 300.0
@@ -521,6 +522,8 @@ def guasto(s, which):
             st[3] = max(st[3], abs(wrap(x[2] - s.setpoints[3])))
         if s.in_sub(phase):
             xy.append((x[3], x[4]))
+            if s.nav is not None and s.nav.pos_valid:
+                xy_est.append((s.nav.x, s.nav.y))
         if x[9] == 0.0 and x[1] < 0.3 and s.status.state in (READY, FAULTSAFE):
             up = True
             break
@@ -536,6 +539,10 @@ def guasto(s, which):
     if len(xy) > 1:
         (x0, y0), (x1, y1) = xy[0], xy[-1]
         track = ': %.1f m on course %.2f rad' % (
+            math.hypot(x1 - x0, y1 - y0), math.atan2(y1 - y0, x1 - x0))
+    if len(xy_est) > 1:
+        (x0, y0), (x1, y1) = xy_est[0], xy_est[-1]
+        track += ' (estimate %.1f m on course %.2f rad)' % (
             math.hypot(x1 - x0, y1 - y0), math.atan2(y1 - y0, x1 - x0))
     s.log('EFFECT track in %s%s; up and disarmed %.1f s after the fault' % (
         phase, track or ': none', s.now() - t_f))
@@ -680,12 +687,35 @@ def goto(s, perdi_dvl=False):
         name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path)))
 
 
+def geofence(s):
+    """The GOTO plan with a fence smaller than the distance of the point (bridge
+    geofence.raggio_m, from PONTE_YAML; GEOFENCE_M is the same radius for the checks): the
+    watchdog must abort with GEOFENCE when the estimated position leaves the circle."""
+    r = float(os.environ.get('GEOFENCE_M', '3.0'))
+    s.plan = PLAN_GOTO
+    if not s.start_mission():
+        return
+    origin = (s.truth[3], s.truth[4]) if s.truth else (0.0, 0.0)
+    ok = s.wait_for(lambda: s.status.state == ABORT, 150.0)
+    reason = REASON[s.status.abort_reason] if ok else 'none'
+    n, x = s.nav, s.truth
+    s.check(ok and reason == 'GEOFENCE', 'Abort with reason GEOFENCE (%s, chart %s)' % (
+        reason, name(s.status.substate)))
+    if n is not None and x:
+        s.log('at the abort: estimated distance %.2f m, true %.2f m from the start (fence %.1f m)'
+              % (math.hypot(n.x, n.y), math.hypot(x[3] - origin[0], x[4] - origin[1]), r))
+        s.check(abs(math.hypot(n.x, n.y) - r) < 0.3, 'abort at the fence (estimate within 0.3 m)')
+    s.check(s.wait_for(lambda: s.truth[9] == 0.0 and s.truth[1] < 0.3, 120.0),
+            'vehicle at the surface and disarmed')
+
+
 SCENARIOS = {'completa': completa, 'batteria': batteria, 'barometro': barometro,
              'override': override}
 SCENARIOS.update({f: (lambda s, f=f: guasto(s, f)) for f in FAULTS})
 SCENARIOS['ostacolo'] = ostacolo
 SCENARIOS['falsi_allarmi'] = falsi_allarmi
 SCENARIOS['goto'] = goto
+SCENARIOS['geofence'] = geofence
 SCENARIOS['goto_dvl_perso'] = lambda s: goto(s, perdi_dvl=True)
 
 
