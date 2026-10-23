@@ -455,7 +455,7 @@ FAULTS = {
                                 'none if 30 % of vertical thrust still holds the depth, '
                                 'else Abort TRACKING'),
     'guasto_transetto': ('TrRun', 3.0, {'motori_guasti': '1', 'efficienza_guasto': 0.0},
-                         'none (no guard on heading or track in a task)'),
+                         'none (cross-track ~0.75 m with DVL=1, under P_CROSS_MAX 1 m)'),
     'guasto_debole': ('TrRun', 3.0, {'motori_guasti': '1,2,3,4', 'efficienza_guasto': 0.5},
                       'none (half thrust on all horizontals: slower transect)'),
     'guasto_risalita': ('AscToSafety', 1.0,
@@ -474,7 +474,8 @@ FAULTS = {
     'corrente_hold': ('Hold', 3.0, {'correnti_attive': True},
                       'none: no position, the chart cannot see the drift (EFFECT track)'),
     'corrente_transetto': ('TrRun', 0.5, {'correnti_attive': True},
-                           'none: the heading is held, the course drifts (EFFECT track)'),
+                           'without position none (the course drifts, EFFECT track); with DVL=1 '
+                           'TaskFailed, note DRIFT, cross-track over 1 m for 3 s'),
     'imu_persa': ('Hold', 3.0, {'imu_attiva': False},
                   'FaultSafe CRITICAL (IMU stale), disarm, float up'),
     'sonar_perso': ('AltTrack', 3.0, {'sonar_attivo': False},
@@ -531,8 +532,10 @@ def guasto(s, which):
                if st in (ABORT, FAULTSAFE) or name(sub) in ('TaskFailed', 'AltFallback')]
     if reacted:
         t, st, sub, r = reacted[0]
-        s.log('DETECTION %s/%s reason %s, %.1f s after the fault' % (
-            TOP[st], name(sub), REASON[r], t - t_f))
+        notes = ['NONE', 'ENERGY', 'OBSTACLE', 'NAV_LOST', 'DRIFT']   # ReportNote
+        nt = s.status.note
+        s.log('DETECTION %s/%s reason %s, note %s, %.1f s after the fault' % (
+            TOP[st], name(sub), REASON[r], notes[nt] if nt < len(notes) else nt, t - t_f))
     else:
         s.log('DETECTION none: the chart did not leave the mission plan')
     track = ''
