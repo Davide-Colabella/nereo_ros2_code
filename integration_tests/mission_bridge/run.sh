@@ -83,7 +83,7 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
       ${SIM_ARGS[@]+--ros-args "${SIM_ARGS[@]}"}
     # PING360_ETA=<s>: oldest echo still used (3 s; ~12 s for the full rotation)
     [ "${PING360:-0}" = 1 ] && start ping360.log python3 "$TESI_DIR/stonefish/ping360_ostacoli.py" \
-      --ros-args -p eta_max_s:=${PING360_ETA:-3.0}
+      --ros-args -p eta_max_s:=$(printf %.1f "${PING360_ETA:-3}")
     export YAW_TURN_S=30 YAW_TURN_TOL=0.02
   else
     start sim_dinamica.log ros2 run gui_pkg sim_dinamica
