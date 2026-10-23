@@ -12,7 +12,8 @@ branch `tesi-davide`), against a simulated vehicle.
 | `fake_vehicle.py` | `SIM=fake`: sensors fixed at the surface (depth 0, IMU, diagnostics), firmware arming `/set_arm_mode` → `/rov_armed`, tare services |
 | `sim_dinamica` (`gui_pkg`) | `SIM=dinamica`: closed-loop simulator, see below |
 | `pilot.py` | scenario `base` |
-| `missione.py` | scenarios `completa`, `batteria`, `barometro`, `override` (closed loop) |
+| `missione.py` | closed-loop scenarios: `completa`, `batteria`, `barometro`, `override`; with Stonefish also the faults, `ostacolo`, `falsi_allarmi`, `goto`, `goto_dvl_perso`, `geofence`, `demo` (below) |
+| Stonefish (`Tesi-Magistrale/stonefish`) | `SIM=stonefish`: 6-DOF physics with the 8 T200, `sim_stonefish.py` as firmware and sensors, fault injection |
 
 Every scenario prints `PASS`/`FAIL` per check, the states the chart went through
 (`STATES Boot/WaitLink > ...`) and `RESULT PASS`/`RESULT FAIL`.
@@ -31,13 +32,49 @@ SIM=dinamica SCENARIO=completa ./integration_tests/mission_bridge/run.sh   # clo
 
 | Variable | Default | |
 |---|---|---|
-| `SIM` | `fake` | `fake` or `dinamica` |
+| `SIM` | `fake` | `fake`, `dinamica` or `stonefish` |
 | `SCENARIO` | `base` (fake), `completa` (dinamica) | `base` runs with both simulators, the others only with `dinamica` |
 | `BAG` | 0 (fake), 1 (dinamica) | 1: `ros2 bag record -a` into `$LOG_DIR/bag_<scenario>` |
 | `LOG_DIR` | a temporary folder | node logs, `pilot_<scenario>.log`, bags |
-| `ROS_DOMAIN_ID` | 77 | keeps the test off the vehicle network |
+| `ROS_DOMAIN_ID` | 77 | keeps the test off the vehicle network; parallel runs need one each |
+| `PLOT` | 0 | 1: PlotJuggler with the Nereo layout |
 
-The workspace defaults are the `install` folders next to this repository.
+The workspace defaults are the `install` folders next to this repository. On the thesis PC the
+three are one colcon workspace, `~/nereo_ws` (sourced by the shell): after a change to the chart
+or the bridge it is rebuilt there (`colcon build --symlink-install --packages-select
+nereo_mission_msgs nereo_mission nereo_mission_bridge`).
+
+## Closed loop: Stonefish (21-23/10/2026)
+
+`SIM=stonefish` runs the Stonefish scenario of `Tesi-Magistrale/stonefish` with
+`sim_stonefish.py` (same node name and topics as `sim_dinamica`), and the controller with the
+Stonefish yaw gains (kp 0.6, ki 0.01, kd 0.5). Results and their analysis:
+`Tesi-Magistrale/stonefish/prove/README.md`.
+
+| Variable | Default | |
+|---|---|---|
+| `SCN` | `nereo.scn` | scenario file in `stonefish/data` (current, pole, Ping360, colours: `genera_scenario.py`) |
+| `GUI` | 0 | 1: Stonefish window (forced by `PING360=1`: the sonar needs the GPU) |
+| `RITARDO` | — | depth and IMU delay in s from the start |
+| `OSTACOLI` | 0 | 1: the bridge reads `/ostacoli/scan` (forward ray sensor, or the Ping360 driver) |
+| `PING360`, `PING360_ETA` | 0, 3 | 1: the Ping360 driver `ping360_ostacoli.py`; oldest echo kept, s (12 for the full rotation) |
+| `DVL` | 0 | 1: the bridge reads `/dvl/velocita` (position, geofence, GOTO guidance) |
+| `PONTE_YAML` | — | another parameter file for the bridge (e.g. `stonefish/prove/ponte_aggiramento_0.8.yaml`) |
+| `CORRENTE` | 0 | 1: `goto` switches the current of `SCN` on in GtApproach |
+| `GEOFENCE_M`, `OSTACOLO_XY` | 3.0, `3.15,2.52` | fence radius and pole position used by the checks |
+| `YAW_KP`, `YAW_KI`, `YAW_KD` | 0.6, 0.01, 0.5 | controller yaw gains |
+
+Scenarios only with Stonefish:
+- **Faults** (`FAULTS` in `missione.py`): one fault injected in one phase of the `completa` plan
+  (motors lost or weak, commands lost, IMU, sonar, sensor delay, current). PASS/FAIL is only
+  the safety outcome (at the surface, disarmed); the chart reaction (`DETECTION`) and the
+  steady errors per substate (`EFFECT`) are logged against the expected line.
+- **`ostacolo`, `falsi_allarmi`**: pole on the transect / no obstacle, with `OSTACOLI=1`.
+- **`goto`, `goto_dvl_perso`, `geofence`**: with `DVL=1`.
+- **`demo`**: hold, transect with avoidance, GOTO, altitude hold; only to be watched
+  (`GUI=1 OSTACOLI=1 PING360=1 DVL=1`, coloured scenario).
+
+Several runs at once: `Tesi-Magistrale/stonefish/prove/scenari.sh` (J runs, one ROS domain each).
 
 ## Scenario `base` (both simulators)
 
