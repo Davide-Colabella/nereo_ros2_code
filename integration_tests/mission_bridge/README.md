@@ -55,6 +55,8 @@ Stonefish yaw gains (kp 0.6, ki 0.01, kd 0.5). Results and their analysis:
 |---|---|---|
 | `SCN` | `nereo.scn` | scenario file in `stonefish/data` (current, pole, Ping360, colours: `genera_scenario.py`) |
 | `GUI` | 0 | 1: Stonefish window (forced by `PING360=1`: the sonar needs the GPU) |
+| `QUALITA`, `RIS_X`, `RIS_Y` | low, 1280, 720 | rendering quality (low, medium, high) and window size, with the window |
+| `GPU` | — | `nvidia`: the window renders on the NVIDIA card with PRIME offload (desktop on the integrated GPU) |
 | `RITARDO` | — | depth and IMU delay in s from the start |
 | `OSTACOLI` | 0 | 1: the bridge reads `/ostacoli/scan` (forward ray sensor, or the Ping360 driver) |
 | `PING360`, `PING360_ETA` | 0, 3 | 1: the Ping360 driver `ping360_ostacoli.py`; oldest echo kept, s (12 for the full rotation) |

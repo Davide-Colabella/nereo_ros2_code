@@ -14,7 +14,8 @@
 #   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
 #   SCN=<file> another scenario of stonefish/data (default nereo.scn, e.g. a current from
 #   genera_scenario.py --corrente); GUI=1 opens the Stonefish window (default: no window;
-#   QUALITA=low|medium|high rendering, RIS_X/RIS_Y window size, default low 1280x720); fault scenarios guasto_*,
+#   QUALITA=low|medium|high rendering, RIS_X/RIS_Y window size, default low 1280x720; GPU=nvidia renders on
+#   the NVIDIA card with PRIME offload); fault scenarios guasto_*,
 #   comandi_persi, imu_persa, sonar_perso (missione.py, FAULTS); YAW_KP, YAW_KI, YAW_KD
 #   override the yaw gains of the controller. PLOT=1 opens PlotJuggler with the
 #   Nereo layout (Tesi-Magistrale/stonefish/plotjuggler_nereo.xml). TESI_DIR: the
@@ -69,7 +70,11 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
     # it needs the GPU, so the simulator with the window; ping360_ostacoli.py turns the echo
     # profiles into /ostacoli/scan (use with OSTACOLI=1)
     if [ "${GUI:-0}" = 1 ] || [ "${PING360:-0}" = 1 ]; then
-      start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
+      # GPU=nvidia: render on the NVIDIA card with PRIME offload (the desktop stays on the
+      # integrated GPU); default the GPU of the desktop
+      GPU_ENV=()
+      [ "${GPU:-}" = nvidia ] && GPU_ENV=(__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia)
+      start stonefish.log env "${GPU_ENV[@]}" ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN" \
         rendering_quality:="${QUALITA:-low}" window_res_x:="${RIS_X:-1280}" window_res_y:="${RIS_Y:-720}"
     else
