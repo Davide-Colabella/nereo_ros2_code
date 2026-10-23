@@ -590,10 +590,45 @@ def ostacolo(s):
         name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path)))
 
 
+def falsi_allarmi(s):
+    """completa plan with avoid_enabled and no obstacle in the scene: every obstacle the
+    bridge reports is a false alarm (echoes from the seabed, the surface, noise)."""
+    s.avoid = True
+    if not s.start_mission():
+        return
+    n = n_valid = 0
+    dmin = float('inf')
+    first = None
+    avoid_seen = False
+    end = time.monotonic() + 300.0
+    while time.monotonic() < end:
+        s.spin_for(0.1)
+        o = s.obstacle
+        if o is not None and s.status.state == MISSION:
+            n += 1
+            if o.valid:
+                n_valid += 1
+                dmin = min(dmin, o.dist)
+                if first is None:
+                    first = (s.now(), o.dist, o.bearing, name(s.status.substate))
+        if name(s.status.substate).startswith('Av'):
+            avoid_seen = True
+        x = s.truth
+        if x and x[9] == 0.0 and x[1] < 0.3 and s.status.state in (READY, FAULTSAFE):
+            break
+    s.log('obstacle bus in Mission: %d samples, %d valid (closest %.2f m)%s' % (
+        n, n_valid, dmin, '' if first is None else
+        ', first at %.1f s: %.2f m, bearing %.2f rad, in %s' % first))
+    s.check(n > 0, 'the bridge publishes the obstacle bus')
+    s.check(not avoid_seen, 'no AvoidObstacle without obstacles')
+    s.check(s.truth[9] == 0.0 and s.truth[1] < 0.3, 'vehicle at the surface and disarmed')
+
+
 SCENARIOS = {'completa': completa, 'batteria': batteria, 'barometro': barometro,
              'override': override}
 SCENARIOS.update({f: (lambda s, f=f: guasto(s, f)) for f in FAULTS})
 SCENARIOS['ostacolo'] = ostacolo
+SCENARIOS['falsi_allarmi'] = falsi_allarmi
 
 
 def main():
