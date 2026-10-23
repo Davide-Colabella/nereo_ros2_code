@@ -35,7 +35,7 @@ import time
 
 import rclpy
 from nereo_interfaces.msg import CommandVelocity
-from nereo_mission_msgs.msg import Cmd, MissionStatusBus, PlanBus
+from nereo_mission_msgs.msg import Cmd, MissionStatusBus, ObstacleBus, PlanBus
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
@@ -131,6 +131,8 @@ class Scenario(Node):
         self.truth = None       # sim_dinamica: [t, depth, yaw, x, y, w, u, v, r, armed]
         self.depth_meas = None
         self.setpoints = None
+        self.avoid = False      # plan.avoid_enabled
+        self.obstacle = None    # missione/obstacle, if the bridge publishes it
         self.create_subscription(UInt8, '/modalita_guida',
                                  lambda m: setattr(self, 'mode', m.data), LATCHED)
         self.create_subscription(MissionStatusBus, 'missione/mission_status', self._status, 10)
@@ -140,6 +142,8 @@ class Scenario(Node):
                                  lambda m: setattr(self, 'depth_meas', m.data), BEST_EFFORT)
         self.create_subscription(Float64MultiArray, '/controller/setpoints',
                                  lambda m: setattr(self, 'setpoints', list(m.data)), 10)
+        self.create_subscription(ObstacleBus, 'missione/obstacle',
+                                 lambda m: setattr(self, 'obstacle', m), 10)
         self.p_plan = self.create_publisher(PlanBus, 'missione/plan', LATCHED)
         self.p_cmd = self.create_publisher(Cmd, 'missione/cmd', 10)
         self.p_joy = self.create_publisher(Joy, 'joy', 10)
@@ -231,7 +235,8 @@ class Scenario(Node):
         return False
 
     def publish_plan(self):
-        plan = PlanBus(valid=True, len=len(PLAN), max_depth=4.0, max_time=900.0)
+        plan = PlanBus(valid=True, len=len(PLAN), max_depth=4.0, max_time=900.0,
+                       avoid_enabled=self.avoid)
         for i, (typ, depth, heading, speed, duration, altitude) in enumerate(PLAN):
             plan.type[i] = typ
             plan.depth[i] = depth
@@ -539,9 +544,56 @@ def guasto(s, which):
         name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path[n_path:])))
 
 
+# ── obstacle (SIM=stonefish, OSTACOLI=1, scenario with a pole) ────────────
+
+def ostacolo(s):
+    """completa plan with avoid_enabled and a pole on the transect: the bridge sees it in the
+    forward scan, the chart goes through AvoidObstacle. OSTACOLO_XY=x,y is where the pole is
+    in the Stonefish scenario (genera_scenario.py --ostacolo X Y), for the checks on the true
+    geometry: sign of the bearing and closest distance."""
+    px, py = (float(v) for v in os.environ.get('OSTACOLO_XY', '3.15,2.52').split(','))
+    s.avoid = True
+    if not s.start_mission():
+        return
+    s.check(s.wait_for(lambda: s.in_sub('TrRun'), 150.0), 'TrRun reached')
+    first = None
+    dmin = float('inf')
+    avoid_seen = False
+    end = time.monotonic() + 300.0
+    while time.monotonic() < end:
+        s.spin_for(0.1)
+        x = s.truth
+        if not x:
+            continue
+        dmin = min(dmin, math.hypot(px - x[3], py - x[4]))
+        o = s.obstacle
+        if first is None and o is not None and o.valid:
+            # bearing of the pole from the true pose, NED: positive to starboard
+            true_b = wrap(math.atan2(py - x[4], px - x[3]) - x[2])
+            first = (s.now(), o.dist, o.bearing, true_b, math.hypot(px - x[3], py - x[4]))
+        if name(s.status.substate).startswith('Av'):
+            avoid_seen = True
+        if x[9] == 0.0 and x[1] < 0.3 and s.status.state in (READY, FAULTSAFE):
+            break
+    if first:
+        t, d, b, tb, dc = first
+        s.log('first obstacle at %.1f s: dist %.2f m (pole centre %.2f m, radius 0.3), bearing '
+              '%.2f rad, true %.2f rad' % (t, d, dc, b, tb))
+        s.check(b * tb > 0 or abs(tb) < 0.03, 'obstacle bearing on the right side (%.2f vs true %.2f)'
+                % (b, tb))
+    else:
+        s.check(False, 'obstacle seen by the bridge')
+    s.check(avoid_seen, 'chart went through AvoidObstacle')
+    s.check(dmin > 0.3 + 0.35, 'no contact: closest distance pole centre - vehicle %.2f m' % dmin)
+    s.check(s.truth[9] == 0.0 and s.truth[1] < 0.3, 'vehicle at the surface and disarmed')
+    s.log('path: %s' % ' > '.join(
+        name(sub) + ('(%s)' % REASON[r] if r else '') for _, _, sub, r in _merged(s.path)))
+
+
 SCENARIOS = {'completa': completa, 'batteria': batteria, 'barometro': barometro,
              'override': override}
 SCENARIOS.update({f: (lambda s, f=f: guasto(s, f)) for f in FAULTS})
+SCENARIOS['ostacolo'] = ostacolo
 
 
 def main():

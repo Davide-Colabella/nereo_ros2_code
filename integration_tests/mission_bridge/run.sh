@@ -36,7 +36,7 @@ mkdir -p "$LOG"
 case "$SIM/$SCENARIO" in
   fake/base|dinamica/base|dinamica/completa|dinamica/batteria|dinamica/barometro|dinamica/override) ;;
   stonefish/base|stonefish/completa|stonefish/batteria|stonefish/barometro|stonefish/override) ;;
-  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
+  stonefish/guasto_*|stonefish/nessun_guasto|stonefish/ritardo_*|stonefish/corrente_*|stonefish/ostacolo|stonefish/comandi_persi|stonefish/imu_persa|stonefish/sonar_perso) ;;
   *) echo "unknown SIM/SCENARIO: $SIM/$SCENARIO"; exit 2 ;;
 esac
 
@@ -102,7 +102,13 @@ fi
 start safety_node.log ros2 run web_pkg safety_node
 start controller.log ros2 run nereo_controller_node nereo_controller_node --ros-args "${CTRL_ARGS[@]}"
 # chart + bridge, bench mode (FpgaBus from /rov_armed, bench battery)
-start bridge.log ros2 launch nereo_mission_bridge nereo_mission_bridge.launch.py modalita_banco:=true
+# OSTACOLI=1: the bridge reads the forward scan (/ostacoli/scan, from sim_stonefish) and
+# publishes the obstacle bus; default off, as on the vehicle (no Ping360 yet)
+OST_ARGS=()
+[ "${OSTACOLI:-0}" = 1 ] && OST_ARGS=(topic_ostacoli:=/ostacoli/scan)
+# PONTE_YAML=<file>: another parameter file for the bridge (e.g. other avoidance commands)
+[ -n "${PONTE_YAML:-}" ] && OST_ARGS+=(parametri_ponte:="$PONTE_YAML")
+start bridge.log ros2 launch nereo_mission_bridge nereo_mission_bridge.launch.py modalita_banco:=true "${OST_ARGS[@]}"
 # PLOT=1: PlotJuggler with the Nereo layout, left open at the end to look at the run
 if [ "${PLOT:-0}" = 1 ]; then
   : "${TESI_DIR:=$REPO/../Tesi-Magistrale}"
