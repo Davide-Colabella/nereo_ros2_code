@@ -13,7 +13,8 @@
 # SIM=stonefish: Stonefish with Tesi-Magistrale/stonefish/data/nereo.scn and
 #   sim_stonefish.py (same interface and node name as sim_dinamica), same scenarios;
 #   SCN=<file> another scenario of stonefish/data (default nereo.scn, e.g. a current from
-#   genera_scenario.py --corrente); GUI=1 opens the Stonefish window (default: no window); fault scenarios guasto_*,
+#   genera_scenario.py --corrente); GUI=1 opens the Stonefish window (default: no window;
+#   QUALITA=low|medium|high rendering, RIS_X/RIS_Y window size, default low 1280x720); fault scenarios guasto_*,
 #   comandi_persi, imu_persa, sonar_perso (missione.py, FAULTS); YAW_KP, YAW_KI, YAW_KD
 #   override the yaw gains of the controller. PLOT=1 opens PlotJuggler with the
 #   Nereo layout (Tesi-Magistrale/stonefish/plotjuggler_nereo.xml). TESI_DIR: the
@@ -70,7 +71,7 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
     if [ "${GUI:-0}" = 1 ] || [ "${PING360:-0}" = 1 ]; then
       start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN" \
-        rendering_quality:=low window_res_x:=1280 window_res_y:=720
+        rendering_quality:="${QUALITA:-low}" window_res_x:="${RIS_X:-1280}" window_res_y:="${RIS_Y:-720}"
     else
       start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator_nogpu.launch.py \
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN"
