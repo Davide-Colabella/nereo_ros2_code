@@ -64,7 +64,10 @@ start() {   # start <log> <command...>
 }
 if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
   if [ "$SIM" = stonefish ]; then
-    if [ "${GUI:-0}" = 1 ]; then
+    # PING360=1: obstacles from the Ping360 of the scenario (genera_scenario.py --ping360):
+    # it needs the GPU, so the simulator with the window; ping360_ostacoli.py turns the echo
+    # profiles into /ostacoli/scan (use with OSTACOLI=1)
+    if [ "${GUI:-0}" = 1 ] || [ "${PING360:-0}" = 1 ]; then
       start stonefish.log ros2 launch stonefish_ros2 stonefish_simulator.launch.py \
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN" \
         rendering_quality:=low window_res_x:=1280 window_res_y:=720
@@ -73,8 +76,14 @@ if [ "$SIM" = dinamica ] || [ "$SIM" = stonefish ]; then
         simulation_data:="$SF_DATA" scenario_desc:="$SF_DATA/$SCN"
     fi
     # RITARDO=<s>: depth and IMU late by that much from the start (sim_stonefish ritardo_sensori_s)
+    SIM_ARGS=()
+    [ -n "${RITARDO:-}" ] && SIM_ARGS+=(-p ritardo_sensori_s:=$RITARDO)
+    [ "${PING360:-0}" = 1 ] && SIM_ARGS+=(-p ostacoli_da_multibeam:=false)
     start sim_dinamica.log python3 "$TESI_DIR/stonefish/sim_stonefish.py" \
-      ${RITARDO:+--ros-args -p ritardo_sensori_s:=$RITARDO}
+      ${SIM_ARGS[@]+--ros-args "${SIM_ARGS[@]}"}
+    # PING360_ETA=<s>: oldest echo still used (3 s; ~12 s for the full rotation)
+    [ "${PING360:-0}" = 1 ] && start ping360.log python3 "$TESI_DIR/stonefish/ping360_ostacoli.py" \
+      --ros-args -p eta_max_s:=${PING360_ETA:-3.0}
     export YAW_TURN_S=30 YAW_TURN_TOL=0.02
   else
     start sim_dinamica.log ros2 run gui_pkg sim_dinamica
