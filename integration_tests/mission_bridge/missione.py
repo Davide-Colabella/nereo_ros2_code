@@ -485,6 +485,9 @@ FAULTS = {
                                    'TaskFailed DRIFT as corrente_transetto; the gaps restart '
                                    'duration(tr_err) every 2.5 s, under P_CROSS_TIME (3 s): '
                                    'the guard may never trip'),
+    'guasto_due_lato': ('TrRun', 3.0, {'motori_guasti': '1,3', 'efficienza_guasto': 0.0},
+                        'two horizontal thrusters on the same side lost (1 and 3): a constant yaw '
+                        'torque; heading error and cross-track grow, maybe DRIFT with DVL=1'),
     'guasto_due_orizzontali': ('TrRun', 3.0, {'motori_guasti': '1,2', 'efficienza_guasto': 0.0},
                                'two horizontal thrusters lost: heading and cross-track degrade; '
                                'with DVL=1 TaskFailed DRIFT if the cross-track stays over 1 m for 3 s'),
@@ -493,6 +496,14 @@ FAULTS = {
     'sonar_perso': ('AltTrack', 3.0, {'sonar_attivo': False},
                     'AltFallback after P_ALT_LOSS (2 s), TaskFailed after 20 s, policy'),
 }
+
+
+def dvl_buchi(s, phase):
+    """DVL_BUCHI=P,B (24/10/2026): from this phase the DVL is silent B s every P s (dvl_buchi of
+    sim_stonefish), in ostacolo and goto."""
+    b = os.environ.get('DVL_BUCHI')
+    if b:
+        s.check(s.set_params(s.sim_params, dvl_buchi=b), 'DVL gaps %s from %s' % (b, phase))
 
 
 def guasto(s, which):
@@ -587,9 +598,11 @@ def ostacolo(s):
     s.check(s.wait_for(lambda: s.in_sub('TrRun'), 150.0), 'TrRun reached')
     if os.environ.get('CORRENTE') == '1':   # the current of the scenario (run.sh SCN=), 24/10/2026
         s.check(s.set_params(s.sim_params, correnti_attive=True), 'current switched on in TrRun')
+    dvl_buchi(s, 'TrRun')
     first = None
     dmin = float('inf')
     avoid_seen = False
+    drift_seen = False
     end = time.monotonic() + 300.0
     while time.monotonic() < end:
         s.spin_for(0.1)
@@ -604,6 +617,8 @@ def ostacolo(s):
             first = (s.now(), o.dist, o.bearing, true_b, math.hypot(px - x[3], py - x[4]))
         if name(s.status.substate).startswith('Av'):
             avoid_seen = True
+        if name(s.status.substate) == 'TaskFailed' and s.status.note == 4:   # ReportNote.DRIFT
+            drift_seen = True
         if x[9] == 0.0 and x[1] < 0.3 and s.status.state in (READY, FAULTSAFE):
             break
     if first:
@@ -614,7 +629,13 @@ def ostacolo(s):
                 % (b, tb))
     else:
         s.check(False, 'obstacle seen by the bridge')
-    s.check(avoid_seen, 'chart went through AvoidObstacle')
+    if os.environ.get('CORRENTE') == '1':
+        # with the current the vehicle can be swept off the pole line before reaching it: the
+        # transect then fails with DRIFT (24/10/2026, corrente_palo_24-10); both are right
+        s.check(avoid_seen or drift_seen, 'with the current: AvoidObstacle or TaskFailed DRIFT '
+                '(avoid %s, drift %s)' % (avoid_seen, drift_seen))
+    else:
+        s.check(avoid_seen, 'chart went through AvoidObstacle')
     s.check(dmin > 0.3 + 0.35, 'no contact: closest distance pole centre - vehicle %.2f m' % dmin)
     s.check(s.truth[9] == 0.0 and s.truth[1] < 0.3, 'vehicle at the surface and disarmed')
     s.log('path: %s' % ' > '.join(
@@ -675,6 +696,7 @@ def goto(s, perdi_dvl=False):
         return
     origin = (s.truth[3], s.truth[4]) if s.truth else (0.0, 0.0)
     s.check(s.wait_for(lambda: s.in_sub('GtApproach'), 120.0), 'GtApproach reached')
+    dvl_buchi(s, 'GtApproach')
     t0 = s.now()
     if os.environ.get('CORRENTE') == '1':   # the current of the scenario (run.sh SCN=)
         s.check(s.set_params(s.sim_params, correnti_attive=True), 'current switched on')
