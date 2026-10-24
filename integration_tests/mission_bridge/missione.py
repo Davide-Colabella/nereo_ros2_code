@@ -486,8 +486,9 @@ FAULTS = {
                                    'duration(tr_err) every 2.5 s, under P_CROSS_TIME (3 s): '
                                    'the guard may never trip'),
     'guasto_due_lato': ('TrRun', 3.0, {'motori_guasti': '1,3', 'efficienza_guasto': 0.0},
-                        'two horizontal thrusters on the same side lost (1 and 3): a constant yaw '
-                        'torque; heading error and cross-track grow, maybe DRIFT with DVL=1'),
+                        'two horizontal thrusters on the same side lost (1 and 3): heading error '
+                        '~0.4 rad, the transect barely advances; with DVL=1 TaskFailed NO_PROGRESS '
+                        '(guard of 24/10/2026; before it, no reaction)'),
     'guasto_due_orizzontali': ('TrRun', 3.0, {'motori_guasti': '1,2', 'efficienza_guasto': 0.0},
                                'two horizontal thrusters lost: heading and cross-track degrade; '
                                'with DVL=1 TaskFailed DRIFT if the cross-track stays over 1 m for 3 s'),
@@ -555,7 +556,7 @@ def guasto(s, which):
                if st in (ABORT, FAULTSAFE) or name(sub) in ('TaskFailed', 'AltFallback')]
     if reacted:
         t, st, sub, r = reacted[0]
-        notes = ['NONE', 'ENERGY', 'OBSTACLE', 'NAV_LOST', 'DRIFT']   # ReportNote
+        notes = ['NONE', 'ENERGY', 'OBSTACLE', 'NAV_LOST', 'DRIFT', 'NO_PROGRESS']   # ReportNote
         nt = s.status.note
         s.log('DETECTION %s/%s reason %s, note %s, %.1f s after the fault' % (
             TOP[st], name(sub), REASON[r], notes[nt] if nt < len(notes) else nt, t - t_f))
